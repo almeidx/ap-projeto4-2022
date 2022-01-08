@@ -7,7 +7,9 @@
 #define NÚMERO_REFEIÇÕES 10
 #define MAX_ALIMENTOS 10
 #define CAMPOS_ALIMENTOS 6
-#define STRING char *
+
+#define FICHEIRO_PESSOAS_TXT "Pessoas.txt"
+#define FICHEIRO_PESSOAS_DAT "Pessoas.dat"
 
 typedef enum { false, true } bool;
 typedef char LinhaTexto[STRING_LENGTH];
@@ -64,21 +66,22 @@ typedef struct Menu {
     de quem invoca a função a libertação da memória alocada
   Autor: Francisco Morgado
 **/
-STRING *Read_Split_Line_File(FILE *f, int n_campos_max, int *n_campos_lidos,
-                             char *separadores) {
+char **splitLine(FILE *f, int n_campos_max, int *n_campos_lidos,
+                 char *separadores) {
   *n_campos_lidos = 0;
   if (!f) return NULL;
+
   if (fgets(LT, STRING_LENGTH, f) !=
       NULL)  // fgets lê uma linha do ficheiro de texto para a string LT
   {
     // "partir" a linha lida, usando os separadores definidos
-    STRING *Res = (STRING *)malloc(
-        n_campos_max * sizeof(STRING));  // alocação de um array com
+    char **Res = (char **)malloc(
+        n_campos_max * sizeof(char *));  // alocação de um array com
                                          // n_campos_max ponteiros para STRING
     char *pch = strtok(LT, separadores);
     int cont = 0;
     while (pch != NULL) {
-      Res[cont] = (STRING)malloc(
+      Res[cont] = (char *)malloc(
           (strlen(pch) + 1) *
           sizeof(char));  // alocação do espaço necessário para guardar a string
                           // correspondente ao campo
@@ -92,22 +95,21 @@ STRING *Read_Split_Line_File(FILE *f, int n_campos_max, int *n_campos_lidos,
   return NULL;
 };
 
-void openFile(FILE *f, STRING fileName, STRING mode) {
-  f = fopen(fileName, mode);
+void clearBuffer() { system("cls"); }
+
+FILE *openFile(char *filename, char *mode) {
+  FILE *f = fopen(filename, mode);
 
   if (f == NULL) {
-    printf("Erro ao abrir o ficheiro %s.\n", fileName);
+    printf("Erro ao abrir o ficheiro %s\n", filename);
     exit(EXIT_FAILURE);
   }
+
+  return f;
 }
 
 void consultarAlimentos() {
-  FILE *f = fopen("Alimentos.txt", "r");
-
-  if (f == NULL) {
-    printf("Erro ao abrir o ficheiro Alimentos.txt.\n");
-    exit(EXIT_FAILURE);
-  }
+  FILE *f = openFile("Alimentos.txt", "r");
 
   char nome[STRING_LENGTH];
 
@@ -118,7 +120,7 @@ void consultarAlimentos() {
   bool found = false;
 
   while (!feof(f)) {
-    char **V = Read_Split_Line_File(f, CAMPOS_ALIMENTOS, &nCamposLidos, ";");
+    char **V = splitLine(f, CAMPOS_ALIMENTOS, &nCamposLidos, ";");
 
     for (int i = 0; i < nCamposLidos; i++) {
       if (i == 0 && strcmp(V[i], nome) == 0) {
@@ -147,35 +149,28 @@ void consultarAlimentos() {
 }
 
 void inserirAlimento() {
-  FILE *f = fopen("Alimentos.txt", "a");
-
-  if (f == NULL) {
-    printf("Erro ao abrir o ficheiro Alimentos.txt.\n");
-    exit(EXIT_FAILURE);
-  }
+  FILE *f = openFile("Alimentos.txt", "a+");
 
   char nome[STRING_LENGTH];
   int grupo;
   float calorias, proteína, gordura, hidratocarbono;
 
-  printf("Qual é o nome do alimento que deseja inserir?\n");
+  printf("Qual é o nome do alimento?\n");
   scanf("%s", nome);
 
-  printf("Qual é o grupo do alimento que deseja inserir?\n");
-  scanf("%s", grupo);
+  printf("Qual é o grupo do alimento?\n");
+  scanf("%s", &grupo);
 
-  printf("Qual é a quantidade de calorias do alimento que deseja inserir?\n");
+  printf("Qual é a quantidade de calorias do alimento?\n");
   scanf("%f", &calorias);
 
-  printf("Qual é a quantidade de proteínas do alimento que deseja inserir?\n");
+  printf("Qual é a quantidade de proteínas do alimento?\n");
   scanf("%f", &proteína);
 
-  printf("Qual é a quantidade de gorduras do alimento que deseja inserir?\n");
+  printf("Qual é a quantidade de gorduras do alimento?\n");
   scanf("%f", &gordura);
 
-  printf(
-      "Qual é a quantidade de hidratos de carbono do alimento que "
-      "deseja inserir?\n");
+  printf("Qual é a quantidade de hidratos de carbono do alimento?\n");
   scanf("%f", &hidratocarbono);
 
   fprintf(f, "%s;%d;%d;%d;%d;%s\n", nome, calorias, proteína, gordura,
@@ -184,56 +179,150 @@ void inserirAlimento() {
   fclose(f);
 }
 
+void alterarAlimento() {
+  FILE *f = openFile("Alimentos.txt", "r+");
+
+  char nome[STRING_LENGTH];
+
+  printf("Qual é o nome do alimento que deseja alterar?\n");
+  scanf("%s", nome);
+
+  int nCamposLidos, nLinhasLidas = 0;
+  bool found = false;
+
+  char *info = (char *)malloc(STRING_LENGTH * sizeof(char));
+
+  while (!feof(f)) {
+    char **V = splitLine(f, CAMPOS_ALIMENTOS, &nCamposLidos, ";");
+
+    nLinhasLidas++;
+
+    for (int i = 0; i < nCamposLidos; i++) {
+      if (i == 0 && strcmp(V[i], nome) == 0) {
+        clearBuffer();
+
+        info = V;
+
+        found = true;
+        break;
+      }
+    }
+
+    for (int i = 0; i < nCamposLidos; i++) free(V[i]);
+
+    free(V);
+
+    if (found) {
+      break;
+    }
+  }
+
+  if (!found) {
+    printf("Alimento não encontrado.\n");
+  }
+
+  int option;
+  do {
+    printf(
+        "O que deseja alterar?\n"
+        "1 - Nome\n"
+        "2 - Calorias\n"
+        "3 - Protainas\n"
+        "4 - Gorduras\n"
+        "5 - Hidratos de Carbono\n"
+        "6 - Cancelar");
+
+    scanf("%d", &option);
+  } while (option < 1 || option > 6);
+
+  switch (option) {
+    case 1: {
+      // Nome
+      printf("Qual é o novo nome do alimento?\n");
+      scanf("%s", nome);
+
+      fseek(f, -(nCamposLidos * sizeof(char *)), SEEK_CUR);
+      fprintf(f, "%s", nome);
+      break;
+    }
+  }
+
+  fclose(f);
+}
+
+void pickOptionAlimentos() {
+  int option;
+
+  do {
+    clearBuffer();
+
+    printf(
+        "O que deseja fazer aos alimentos?\n"
+        " 1 - consultar\n"
+        " 2 - inserir\n"
+        " 3 - alterar\n"
+        " 4 - eliminar\n"
+        " 5 - sair\n");
+    scanf("%d", &option);
+  } while (option > 5 || option < 1);
+
+  clearBuffer();
+
+  switch (option) {
+    case 1:
+      consultarAlimentos();
+      break;
+    case 2:
+      inserirAlimento();
+      break;
+    case 3:
+      alterarAlimento();
+      break;
+    case 4:
+      break;
+    case 5:
+      exit(EXIT_SUCCESS);
+  }
+}
+
 void main() {
   setlocale(LC_ALL, "Portuguese");
 
-  //#region Ler ficheiro
-
-  // char tipoFicheiro[5];
-  // do {
-  //   printf("Qual é o tipo de ficheiro que deseja usar? (txt ou dat) ");
-  //   scanf("%s", tipoFicheiro);
-  // } while (strcmp(tipoFicheiro, "txt") && strcmp(tipoFicheiro, "dat"));
-
-  // FILE *ficheiroPessoas;
-  // if (!strcmp(tipoFicheiro, "txt")) {
-  //   openFile(ficheiroPessoas, "Pessoas.txt", "r+");
-  // } else {
-  //   openFile(ficheiroPessoas, "Pessoas.dat", "rb+");
-  // }
-
-  // if (ficheiroPessoas == NULL) {
-  //   printf("Ocorreu um erro ao abrir o ficheiro das pessoas!\n");
-  //   exit(1);
-  // }
-
-  //#endregion
-
-  //#region Operações com alimentos
-
-  char op;
+  int option;
   do {
+    clearBuffer();
+
     printf(
-        "O que deseja fazer (alimentos)? (c-consultar, i-inserir, a-alterar, "
-        "e-eliminar, "
-        "s-sair) ");
-    scanf("%c", &op);
-  } while (op != 'c' && op != 'i' && op != 'a' && op != 'e' && op != 's');
+        "O que deseja fazer?\n"
+        " 1 - alimentos\n"
+        " 2 - utentes\n"
+        " 3 - gerar refeições\n"
+        " 4 - sair\n");
+    scanf("%d", &option);
+  } while (option > 4 || option < 1);
 
-  switch (op) {
-    case 'c':  // consultar
-      consultarAlimentos();
+  switch (option) {
+    case 1: {  // alimentos
+      pickOptionAlimentos();
       break;
-    case 'i':  // inserir
+    }
+
+    case 2: {  // utentes
+      char tipoFicheiro[5];
+      do {
+        printf("Qual é o tipo de ficheiro que deseja usar? (txt ou dat) ");
+        scanf("%s", tipoFicheiro);
+      } while (strcmp(tipoFicheiro, "txt") && strcmp(tipoFicheiro, "dat"));
+
       break;
-    case 'a':  // alterar
+    }
+
+    case 3: {  // gerar refeições
       break;
-    case 'e':  // eliminar
-      break;
-    default:  // sair
-      exit(0);
-      break;
+    }
+
+    case 4: {
+      exit(EXIT_SUCCESS);
+    }
   }
-
-  //#endregion
 }
