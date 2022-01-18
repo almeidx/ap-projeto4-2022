@@ -8,13 +8,16 @@
 #define MAX_ALIMENTOS 10
 #define CAMPOS_ALIMENTOS 6
 
+#define FICHEIRO_ALIMENTOS "Alimentos.txt"
 #define FICHEIRO_PESSOAS_TXT "Pessoas.txt"
 #define FICHEIRO_PESSOAS_DAT "Pessoas.dat"
 
-typedef enum { false, true } bool;
+typedef enum Boolean { false, true } bool;
 typedef char LinhaTexto[STRING_LENGTH];
 
 LinhaTexto LT;
+
+#pragma region Structs
 
 typedef struct Data {
   unsigned int ano, mes, dia;
@@ -49,6 +52,8 @@ typedef struct Menu {
   float kCalorias, minProteínas, maxProteínas, gorduras, hidratosCarbono;
   REFEIÇÃO refeição[NÚMERO_REFEIÇÕES];
 } MENU;
+
+#pragma endregion
 
 /**
   Nome-da-função: Read_Split_Line_File
@@ -95,7 +100,28 @@ char **splitLine(FILE *f, int n_campos_max, int *n_campos_lidos,
   return NULL;
 };
 
+void readFileContent(FILE *f, char **str, long *length) {
+  fseek(f, 0, SEEK_END);
+  *length = ftell(f);
+  fseek(f, 0, SEEK_SET);
+
+  *str = calloc(*length, sizeof(char **));
+  if (*str == NULL) {
+    printf("Failed to allocate memory for file content.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  fread(*str, sizeof(char **), *length, f);
+}
+
 void clearBuffer() { system("cls"); }
+
+int getAmountOfLines(FILE *f) {
+  int lines = 0;
+  while (fgets(LT, STRING_LENGTH, f) != NULL) lines++;
+  rewind(f);
+  return lines;
+}
 
 FILE *openFile(char *filename, char *mode) {
   FILE *f = fopen(filename, mode);
@@ -109,7 +135,7 @@ FILE *openFile(char *filename, char *mode) {
 }
 
 void consultarAlimentos() {
-  FILE *f = openFile("Alimentos.txt", "r");
+  FILE *f = openFile(FICHEIRO_ALIMENTOS, "r");
 
   char nome[STRING_LENGTH];
 
@@ -124,6 +150,8 @@ void consultarAlimentos() {
 
     for (int i = 0; i < nCamposLidos; i++) {
       if (i == 0 && strcmp(V[i], nome) == 0) {
+        clearBuffer();
+
         printf("Nome: %s\n", V[i]);
         printf("Calorias (KCal): %s\n", V[i + 1]);
         printf("Proteínas (g): %s\n", V[i + 2]);
@@ -149,7 +177,7 @@ void consultarAlimentos() {
 }
 
 void inserirAlimento() {
-  FILE *f = openFile("Alimentos.txt", "a+");
+  FILE *f = openFile(FICHEIRO_ALIMENTOS, "a");
 
   char nome[STRING_LENGTH];
   int grupo;
@@ -180,45 +208,42 @@ void inserirAlimento() {
 }
 
 void alterarAlimento() {
-  FILE *f = openFile("Alimentos.txt", "r+");
+  FILE *f = openFile(FICHEIRO_ALIMENTOS, "r");
 
   char nome[STRING_LENGTH];
 
   printf("Qual é o nome do alimento que deseja alterar?\n");
   scanf("%s", nome);
 
-  int nCamposLidos, nLinhasLidas = 0;
+  int nLinhasLidas = 0, nCamposLidos;
   bool found = false;
 
-  char *info = (char *)malloc(STRING_LENGTH * sizeof(char));
+  char **info;
 
   while (!feof(f)) {
-    char **V = splitLine(f, CAMPOS_ALIMENTOS, &nCamposLidos, ";");
+    info = splitLine(f, CAMPOS_ALIMENTOS, &nCamposLidos, ";");
 
     nLinhasLidas++;
 
     for (int i = 0; i < nCamposLidos; i++) {
-      if (i == 0 && strcmp(V[i], nome) == 0) {
-        clearBuffer();
-
-        info = V;
-
+      if (i == 0 && strcmp(info[i], nome) == 0) {
+        printf("Found element with name %s\n", nome);
         found = true;
-        break;
       }
     }
-
-    for (int i = 0; i < nCamposLidos; i++) free(V[i]);
-
-    free(V);
 
     if (found) {
       break;
     }
+
+    for (int i = 0; i < nCamposLidos; i++) free(info[i]);
+
+    free(info);
   }
 
   if (!found) {
     printf("Alimento não encontrado.\n");
+    return;
   }
 
   int option;
@@ -230,22 +255,115 @@ void alterarAlimento() {
         "3 - Protainas\n"
         "4 - Gorduras\n"
         "5 - Hidratos de Carbono\n"
-        "6 - Cancelar");
+        "6 - Grupo\n"
+        "7 - Sair\n");
 
     scanf("%d", &option);
   } while (option < 1 || option > 6);
 
-  switch (option) {
-    case 1: {
-      // Nome
-      printf("Qual é o novo nome do alimento?\n");
-      scanf("%s", nome);
+  long pos = ftell(f);
+  int lines = getAmountOfLines(f);
 
-      fseek(f, -(nCamposLidos * sizeof(char *)), SEEK_CUR);
-      fprintf(f, "%s", nome);
-      break;
-    }
-  }
+  char *fileContent;
+  long fileLength;
+
+  readFileContent(f, &fileContent, &fileLength);
+
+  fclose(f);
+
+  f = openFile(FICHEIRO_ALIMENTOS, "w");
+
+  fwrite(fileContent, sizeof(*fileContent), fileLength, f);
+
+  // ALIMENTOS;CALORIAS(KCal);PROTEINAS(g);GORDURAS(g);H.CARBONO(g);Grupo
+
+  // switch (option) {
+  //   case 1: {  // Nome
+  //     char novoNome[STRING_LENGTH];
+
+  //     printf("Qual é o novo nome do alimento?\n");
+  //     scanf("%s", novoNome);
+
+  //     fprintf(f, "%s;%s;%s;%s;%s;%s\n", novoNome, info[1], info[2],
+  //     info[3],
+  //             info[4], info[5]);
+
+  //     break;
+  //   }
+
+  //   case 2: {  // Calorias
+  //     int calorias;
+
+  //     printf("Qual é a nova quantidade de calorias do alimento
+  //     (KCal)?\n"); scanf("%d", &calorias);
+
+  //     fprintf(f, "%s;%d;%s;%s;%s;%s\n", info[0], calorias, info[2],
+  //     info[3],
+  //             info[4], info[5]);
+
+  //     break;
+  //   }
+
+  //   case 3: {  // Proteínas
+  //     float proteínas;
+
+  //     printf("Qual é a nova quantidade de proteínas do alimento (g)?\n");
+  //     scanf("%.2f", &proteínas);
+
+  //     fprintf(f, "%s;%s;%f;%s;%s;%s\n", info[0], info[1], proteínas,
+  //     info[3],
+  //             info[4], info[5]);
+
+  //     break;
+  //   }
+
+  //   case 4: {  // Gorduras
+  //     float gorduras;
+
+  //     printf("Qual é a nova quantidade de gorduras do alimento (g)?\n");
+  //     scanf("%.2f", &gorduras);
+
+  //     fprintf(f, "%s;%s;%s;%f;%s;%s\n", info[0], info[1], info[2],
+  //     gorduras,
+  //             info[4], info[5]);
+
+  //     break;
+  //   }
+
+  //   case 5: {  // Hidratos de Carbono
+  //     float hidratoCarbono;
+
+  //     printf(
+  //         "Qual é a nova quantidade de hidratos de carbono do alimento "
+  //         "(g)?\n");
+  //     scanf("%.2f", &hidratoCarbono);
+
+  //     fprintf(f, "%s;%s;%s;%s;%f;%s\n", info[0], info[1], info[2],
+  //     info[3],
+  //             hidratoCarbono, info[5]);
+
+  //     break;
+  //   }
+
+  //   case 6: {  // Grupo
+  //     int grupo;
+
+  //     printf("Qual é o novo grupo do alimento (nº)?\n");
+  //     scanf("%d", &grupo);
+
+  //     fprintf(f, "%s;%s;%s;%s;%s;%d\n", info[0], info[1], info[2],
+  //     info[3],
+  //             info[4], grupo);
+
+  //     break;
+  //   }
+
+  //   default:
+  //     break;
+  // }
+
+  free(info);
+  free(fileContent);
 
   fclose(f);
 }
