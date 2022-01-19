@@ -5,13 +5,14 @@
 
 #define STRING_LENGTH 150
 #define TAMANHO_NOME 50
-#define NÚMERO_REFEIÇÕES 10
+#define N_REFEICOES 10
 #define MAX_ALIMENTOS 10
 #define N_CAMPOS_ALIMENTOS 6
 
 #define FICHEIRO_ALIMENTOS "Alimentos.txt"
 #define FICHEIRO_PESSOAS_TXT "Pessoas.txt"
 #define FICHEIRO_PESSOAS_DAT "Pessoas.dat"
+#define FICHEIRO_TMP "tmp.txt"
 
 typedef enum Boolean { false, true } bool;
 typedef char LinhaTexto[STRING_LENGTH];
@@ -19,8 +20,11 @@ typedef char LinhaTexto[STRING_LENGTH];
 LinhaTexto LT;
 
 void clearTerminal() {
-  // Provavelmente só funciona em sistemas Windows :/
+  #ifdef _WIN32 // Se for um sistema Windows
   system("cls");
+  #else // Se não
+  system("clear");
+  #endif
 }
 
 // Usar #pragma para definir regiões para ser mais fácil navegar o ficheiro
@@ -40,7 +44,7 @@ typedef struct Pessoa {
   unsigned int cc;
   char nome[TAMANHO_NOME], morada[STRING_LENGTH], localidade[STRING_LENGTH];
   DATA dataNascimento;
-  unsigned int códigoPostal, telefone, peso, altura, presaoArterial;
+  unsigned int codigoPostal, telefone, peso, altura, presaoArterial;
   INDICE_COLESTEROL indiceColesterol;
 } PESSOA;
 
@@ -49,17 +53,17 @@ typedef struct Alimento {
   unsigned int quantidade;
 } ALIMENTO;
 
-typedef struct Refeição {
+typedef struct Refeicao {
   ALIMENTO alimentos[MAX_ALIMENTOS];
-} REFEIÇÃO;
+} REFEICAO;
 
 typedef struct Menu {
   unsigned int cc;
-  DATA dataRefeição;
+  DATA dataRefeicao;
   // 1-Pequeno Almoço, A-Almoço, 3-Lanche, 4-Jantar, 5-Ceia, 6-Outra
-  unsigned short refeiçãoDoDia;
-  float kCalorias, minProteínas, maxProteínas, gorduras, hidratosCarbono;
-  REFEIÇÃO refeição[NÚMERO_REFEIÇÕES];
+  unsigned short refeicaoDoDia;
+  float kCalorias, minProteinas, maxProteinas, gorduras, hidratosCarbono;
+  REFEICAO refeicao[N_REFEICOES];
 } MENU;
 
 #pragma endregion
@@ -140,6 +144,65 @@ FILE *openFile(char *fileName, char *mode) {
   return f;
 }
 
+// Retorna 1 se o alimento foi encontrado
+bool deleteAlimento(FILE *f, char *nome) {
+  FILE *tmpFile = openFile(FICHEIRO_TMP, "w+");
+
+  // Mover o ponteiro do ficheiro para o inicio
+  fseek(f, 0, SEEK_SET);
+
+  int nCamposLidos;
+  bool found = false, ignore = false;
+  char line[STRING_LENGTH];
+
+  while (!feof(f)) {
+    char **info = splitLine(f, N_CAMPOS_ALIMENTOS, &nCamposLidos, ";");
+
+    for (int i = 0; i < nCamposLidos; i++) {
+      // Se o nome for igual ao do alimento para apagar, ignorar
+      if (i == 0 && strcmp(info[i], nome) == 0) {
+        ignore = true;
+        found = true;
+      }
+
+      // Contatenar todas as strings que foram separadas pela função splitLine
+      if (!ignore) {
+        // A função strcat() estava a deixar alguns caracteres nulos no inicio da linha por algum motivo
+        if (i == 0) {
+          strcpy(line, info[0]);
+        } else {
+          strcat(line, info[i]);
+        }
+
+        // Adicionar o separador
+        if (i != N_CAMPOS_ALIMENTOS - 1) {
+          strcat(line, ";");
+        }
+      }
+    }
+
+    // Se não for para ignorar, copiar o conteudo da linha para o ficheiro temporário
+    if (!ignore) {
+      fputs(line, tmpFile);
+    }
+
+    // Fazer o 'reset' das variáveis temporárias
+    strcpy(line, "");
+    ignore = false;
+    for (int i = 0; i < nCamposLidos; i++) free(info[i]);
+    free(info);
+  }
+
+  // Reescrever o ficheiro de alimentos com o conteudo do ficheiro temporário
+  if (found) {
+    rename(FICHEIRO_TMP, FICHEIRO_ALIMENTOS);
+  } else {
+    remove(FICHEIRO_TMP);
+  }
+
+  return found;
+}
+
 #pragma endregion Files
 
 #pragma region Alimentos
@@ -193,28 +256,28 @@ void inserirAlimento() {
 
   char nome[TAMANHO_NOME];
   int grupo;
-  float calorias, proteína, gordura, hidratocarbono;
+  float calorias, proteinas, gordura, hidratosCarbono;
 
   printf("Qual é o nome do alimento?\n");
   scanf("%s", nome);
 
   printf("Qual é o grupo do alimento?\n");
-  scanf("%s", &grupo);
+  scanf("%d", &grupo);
 
   printf("Qual é a quantidade de calorias do alimento?\n");
   scanf("%f", &calorias);
 
   printf("Qual é a quantidade de proteínas do alimento?\n");
-  scanf("%f", &proteína);
+  scanf("%f", &proteinas);
 
   printf("Qual é a quantidade de gorduras do alimento?\n");
   scanf("%f", &gordura);
 
   printf("Qual é a quantidade de hidratos de carbono do alimento?\n");
-  scanf("%f", &hidratocarbono);
+  scanf("%f", &hidratosCarbono);
 
-  fprintf(f, "%s;%d;%d;%d;%d;%s\n", nome, calorias, proteína, gordura,
-          hidratocarbono, grupo);
+  fprintf(f, "%s;%f;%f;%f;%f%d\n", nome, calorias, proteinas, gordura,
+          hidratosCarbono, grupo);
 
   fclose(f);
 }
@@ -258,7 +321,7 @@ void alterarAlimento() {
     return;
   }
 
-  int option;
+  short option;
   do {
     printf(
         "O que deseja alterar?\n"
@@ -270,10 +333,8 @@ void alterarAlimento() {
         "6 - grupo\n"
         "0 - voltar\n");
 
-    scanf("%d", &option);
+    scanf("%hd", &option);
   } while (option < 0 || option > 6);
-
-  // long pos = ftell(f);
 
   char *fileContent;
   long fileLength;
@@ -379,6 +440,23 @@ void alterarAlimento() {
   fclose(f);
 }
 
+void eliminarAlimento() {
+  FILE *f = openFile(FICHEIRO_ALIMENTOS, "r");
+
+  char nome[TAMANHO_NOME];
+
+  printf("Qual é o nome do alimento que quer eliminar?\n");
+  scanf("%s", nome);
+
+  clearTerminal();
+
+  if (deleteAlimento(f, nome)) {
+    printf("O alimento '%s' foi eliminado com sucesso.\n", nome);
+  } else {
+    printf("Não foi possível eliminar o alimento.\n");
+  }
+}
+
 #pragma endregion Alimentos
 
 #pragma region InteractiveMenu
@@ -399,7 +477,7 @@ void startAlimentosInteractiveMenu() {
         " 3 - alterar\n"
         " 4 - eliminar\n"
         " 0 - voltar\n");
-    scanf("%d", &option);
+    scanf("%hd", &option);
   } while (option > 4 || option < 0);
 
   clearTerminal();
@@ -415,7 +493,7 @@ void startAlimentosInteractiveMenu() {
       alterarAlimento();
       break;
     case 4:
-      // eliminarAlimento();
+      eliminarAlimento();
       break;
     case 0:  // voltar
       startInteractiveMenu();
@@ -434,7 +512,7 @@ void startInteractiveMenu() {
         " 2 - utentes\n"
         " 3 - gerar refeições\n"
         " 0 - sair\n");
-    scanf("%d", &option);
+    scanf("%hd", &option);
   } while (option > 3 || option < 0);
 
   switch (option) {
