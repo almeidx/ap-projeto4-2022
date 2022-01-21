@@ -5,15 +5,19 @@
 
 #define STRING_LENGTH 150
 #define TAMANHO_NOME 50
-#define N_REFEICOES 10
 #define MAX_ALIMENTOS 10
+#define N_REFEICOES 10
 
 #define N_CAMPOS_ALIMENTOS 6
 #define N_CAMPOS_UTENTES 15
 
 #define FICHEIRO_ALIMENTOS "Alimentos.txt"
+
 #define FICHEIRO_UTENTES_TXT "Pessoas.txt"
 #define FICHEIRO_UTENTES_DAT "Pessoas.dat"
+
+#define FICHEIRO_MENUS_TXT "Menus.txt"
+#define FICHEIRO_MENUS_DAT "Menus.dat"
 
 #define FICHEIRO_TMP_TXT "tmp.txt"
 #define FICHEIRO_TMP_DAT "tmp.dat"
@@ -32,16 +36,10 @@ void clearTerminal() {
   #endif
 }
 
-// Retorna o próximo elemento numa array de strings
-char *next(char **str, int *i) {
-  (*i)++;
-  return str[*i];
-}
-
 // Usar #pragma para definir regiões para ser mais fácil navegar o ficheiro
 // (pode não ser suportado em todos os IDEs)
 // https://stackoverflow.com/a/9000516/11252146
-#pragma region Structs
+#pragma region Structures
 
 typedef struct Data {
   unsigned int ano, mes, dia;
@@ -172,6 +170,18 @@ void cloneFile(char *source, char *target) {
 
 #pragma region Alimentos
 
+/*
+  Grupos:
+  1. Fruta;
+  2. Gorduras e Óleos;
+  3. Lacticínios;
+  4. Carne, Pescado e Ovos;
+  5. Leguminosas;
+  6. Cereais e derivados e Tubérculos;
+  7. Hortícolas;
+  8. Outros.
+*/
+
 // Retorna 1 se o alimento foi encontrado
 bool deleteAlimento(FILE *f, char *nome) {
   FILE *tmpFile = openFile(FICHEIRO_TMP_TXT, "w+");
@@ -179,14 +189,19 @@ bool deleteAlimento(FILE *f, char *nome) {
   // Mover o ponteiro do ficheiro para o inicio
   fseek(f, 0, SEEK_SET);
 
-  int nCamposLidos;
+  int camposLidos;
   bool found = false, ignore = false;
-  char line[STRING_LENGTH];
+  char line[STRING_LENGTH], **info;
 
   while (!feof(f)) {
-    char **info = splitLine(f, N_CAMPOS_ALIMENTOS, &nCamposLidos, ";");
+    info = splitLine(f, N_CAMPOS_ALIMENTOS, &camposLidos, ";");
+    if (camposLidos < N_CAMPOS_ALIMENTOS) {
+      for (int i = 0; i < camposLidos; i++) free(info[i]);
+      free(info);
+      continue;
+    }
 
-    for (int i = 0; i < nCamposLidos; i++) {
+    for (int i = 0; i < camposLidos; i++) {
       // Se o nome for igual ao do alimento para apagar, ignorar
       if (i == 0 && strcmp(info[i], nome) == 0) {
         ignore = true;
@@ -217,7 +232,7 @@ bool deleteAlimento(FILE *f, char *nome) {
     // Fazer o 'reset' das variáveis temporárias
     strcpy(line, "");
     ignore = false;
-    for (int i = 0; i < nCamposLidos; i++) free(info[i]);
+    for (int i = 0; i < camposLidos; i++) free(info[i]);
     free(info);
   }
 
@@ -243,22 +258,26 @@ void consultarAlimentos() {
 
   int camposLidos;
   bool found = false;
+  char **line;
 
   while (!feof(f)) {
-    char **line = splitLine(f, N_CAMPOS_ALIMENTOS, &camposLidos, ";");
+    line = splitLine(f, N_CAMPOS_ALIMENTOS, &camposLidos, ";");
+    if (camposLidos < N_CAMPOS_ALIMENTOS) {
+      for (int i = 0; i < camposLidos; i++) free(line[i]);
+      free(line);
+      continue;
+    }
 
     for (int i = 0; i < camposLidos; i++) {
       if (i == 0 && strcmp(line[i], nome) == 0) {
         clearTerminal();
 
-        int j = 0;
-
         printf("Nome: %s\n", line[0]);
-        printf("Calorias (KCal): %s\n", next(line, &j));
-        printf("Proteínas (g): %s\n", next(line, &j));
-        printf("Gorduras (g): %s\n", next(line, &j));
-        printf("Hidratos de Carbono (g): %s\n", next(line, &j));
-        printf("Grupo: %s\n", next(line, &j));
+        printf("Calorias (KCal): %s\n", line[1]);
+        printf("Proteínas (g): %s\n", line[2]);
+        printf("Gorduras (g): %s\n", line[3]);
+        printf("Hidratos de Carbono (g): %s\n", line[4]);
+        printf("Grupo: %s\n", line[5]);
 
         found = true;
         break;
@@ -318,17 +337,19 @@ void alterarAlimento() {
   printf("Qual é o nome do alimento que deseja alterar?\n");
   scanf("%s", nome);
 
-  int nLinhasLidas = 0, nCamposLidos;
+  int camposLidos;
   bool found = false;
-
   char **info;
 
   while (!feof(f)) {
-    info = splitLine(f, N_CAMPOS_ALIMENTOS, &nCamposLidos, ";");
+    info = splitLine(f, N_CAMPOS_ALIMENTOS, &camposLidos, ";");
+    if (camposLidos < N_CAMPOS_ALIMENTOS) {
+      for (int i = 0; i < camposLidos; i++) free(info[i]);
+      free(info);
+      continue;
+    }
 
-    nLinhasLidas++;
-
-    for (int i = 0; i < nCamposLidos; i++) {
+    for (int i = 0; i < camposLidos; i++) {
       if (i == 0 && strcmp(info[i], nome) == 0) {
         found = true;
         break;
@@ -339,7 +360,7 @@ void alterarAlimento() {
       break;
     }
 
-    for (int i = 0; i < nCamposLidos; i++) free(info[i]);
+    for (int i = 0; i < camposLidos; i++) free(info[i]);
 
     free(info);
   }
@@ -441,6 +462,83 @@ void eliminarAlimento() {
   }
 }
 
+void gerarRefeicoes() {
+  MENU menu;
+  printf("Qual é o número de cartão de cidadão da pessoa?\n");
+  scanf("%u", &menu.cc);
+
+  DATA data;
+  printf("Qual é a data da refeição (dd/mm/yyyy; e.g. 3/4/2022)?\n");
+  scanf("%d/%d/%d", &menu.dataRefeicao.dia, &menu.dataRefeicao.mes, &menu.dataRefeicao.ano);
+
+  clearTerminal();
+
+  do {
+    printf("Qual é o tipo de refeição que quer?\n"
+      "1 - Pequeno Almoço\n"
+      "2 - Almoço\n"
+      "3 - Lanche\n"
+      "4 - Jantar\n"
+      "5 - Ceia\n"
+      "6 - Outra\n");
+
+    scanf("%hd", &menu.refeicaoDoDia);
+  } while (menu.refeicaoDoDia < 1 || menu.refeicaoDoDia > 6);
+
+  clearTerminal();
+
+  printf("Qual é a quantidade de calorias que pretende ingerir (KCal)?\n");
+  scanf("%f", &menu.kCalorias);
+
+  printf("Qual é o mínimo e máximo de calorias que pretende ingerir (min/max)?\n");
+  scanf("%f/%f", &menu.minProteinas, &menu.maxProteinas);
+
+  printf("Qual é a quantidade de gorduras?\n");
+  scanf("%f", &menu.gorduras);
+
+  printf("Qual é a quantidade de hidratos de carbono?\n");
+  scanf("%f", &menu.hidratosCarbono);
+
+  short minimoCategorias;
+  do {
+    printf("Qual é o minimo de categorias a incluir na refeição?\n");
+    scanf("%hd", &minimoCategorias);
+  } while (minimoCategorias < 1 || minimoCategorias > 10);
+
+
+}
+
+void listarAlimentos() {
+  FILE *f = openFile(FICHEIRO_ALIMENTOS, "r");
+
+  int camposLidos;
+  char **line;
+
+  clearTerminal();
+
+  while (!feof(f)) {
+    line = splitLine(f, N_CAMPOS_ALIMENTOS, &camposLidos, ";");
+    if (camposLidos < N_CAMPOS_ALIMENTOS) {
+      for (int i = 0; i < camposLidos; i++) free(line[i]);
+      free(line);
+      continue;
+    }
+
+    printf("\n%s | %s | %s | %s | %s | %s", line[0], line[1], line[2], line[3], line[4], line[5]);
+
+    for (int i = 0; i < camposLidos; i++) free(line[i]);
+    free(line);
+  }
+
+  printf("\n");
+
+  fclose(f);
+}
+
+void displayTop() {
+
+}
+
 #pragma endregion
 
 #pragma region Utentes
@@ -481,14 +579,19 @@ bool deleteUtente(FILE *f, char *nome) {
   // Mover o ponteiro do ficheiro para o inicio
   fseek(f, 0, SEEK_SET);
 
-  int nCamposLidos;
+  int camposLidos;
   bool found = false, ignore = false;
-  char line[STRING_LENGTH];
+  char line[STRING_LENGTH], **info;
 
   while (!feof(f)) {
-    char **info = splitLine(f, N_CAMPOS_UTENTES, &nCamposLidos, ";");
+    info = splitLine(f, N_CAMPOS_UTENTES, &camposLidos, ";");
+    if (camposLidos < N_CAMPOS_UTENTES) {
+      for (int i = 0; i < camposLidos; i++) free(info[i]);
+      free(info);
+      continue;
+    }
 
-    for (int i = 0; i < nCamposLidos; i++) {
+    for (int i = 0; i < camposLidos; i++) {
       // Se o nome for igual ao do utente para apagar, ignorar
       if (i == 0 && strcmp(info[i], nome) == 0) {
         ignore = true;
@@ -519,7 +622,7 @@ bool deleteUtente(FILE *f, char *nome) {
     // Fazer o 'reset' das variáveis temporárias
     strcpy(line, "");
     ignore = false;
-    for (int i = 0; i < nCamposLidos; i++) free(info[i]);
+    for (int i = 0; i < camposLidos; i++) free(info[i]);
     free(info);
   }
 
@@ -553,28 +656,32 @@ void consultarUtentes() {
 
   int camposLidos;
   bool found = false;
+  char **line;
 
   while (!feof(f)) {
-    char **line = splitLine(f, N_CAMPOS_UTENTES, &camposLidos, ";");
+    line = splitLine(f, N_CAMPOS_UTENTES, &camposLidos, ";");
+    if (camposLidos < N_CAMPOS_UTENTES) {
+      for (int i = 0; i < camposLidos; i++) free(line[i]);
+      free(line);
+      continue;
+    }
 
     for (int i = 0; i < camposLidos; i++) {
       if (i == 0 && strcmp(line[i], nome) == 0) {
         clearTerminal();
 
-        int j = 0;
-
         // NOME;CC;DIA;MES;ANO;MORADA;LOCALIDADE;CODIGO_POSTAL;TELEFONE;PESO;ALTURA;PRESAO_ARTERIAL;COLESTEROL_TOTAL;COLESTEROL_HDL;COLESTEROL_LDL
         printf("Nome: %s\n", line[0]);
-        printf("Cartão de Cidadão: %s\n", next(line, &j));
-        printf("Data de Nascimento (dd/mm/yyyy): %s/%s/%s\n", next(line, &j), next(line, &j), next(line, &j));
-        printf("Morada: %s\n", next(line, &j));
-        printf("Localidade: %s\n", next(line, &j));
-        printf("Código Postal: %s\n", next(line, &j));
-        printf("Telefone: %s\n", next(line, &j));
-        printf("Peso: %s\n", next(line, &j));
-        printf("Altura: %s\n", next(line, &j));
-        printf("Presão Arterial: %s\n", next(line, &j));
-        printf("Colesterol (Total/HDL/LDL): %s/%s/%s\n", next(line, &j), next(line, &j), next(line, &j));
+        printf("Cartão de Cidadão: %s\n", line[1]);
+        printf("Data de Nascimento (dd/mm/yyyy): %s/%s/%s\n", line[2], line[3], line[4]);
+        printf("Morada: %s\n", line[5]);
+        printf("Localidade: %s\n", line[6]);
+        printf("Código Postal: %s\n", line[7]);
+        printf("Telefone: %s\n", line[8]);
+        printf("Peso: %s\n", line[9]);
+        printf("Altura: %s\n", line[10]);
+        printf("Presão Arterial: %s\n", line[11]);
+        printf("Colesterol (Total/HDL/LDL): %s/%s/%s\n", line[12], line[13], line[14]);
 
         found = true;
         break;
@@ -666,17 +773,19 @@ void alterarUtente() {
   printf("Qual é o nome do utente que deseja alterar?\n");
   scanf("%s", nome);
 
-  int nLinhasLidas = 0, nCamposLidos;
+  int camposLidos;
   bool found = false;
-
   char **info;
 
   while (!feof(f)) {
-    info = splitLine(f, N_CAMPOS_UTENTES, &nCamposLidos, ";");
+    info = splitLine(f, N_CAMPOS_UTENTES, &camposLidos, ";");
+    if (camposLidos < N_CAMPOS_UTENTES) {
+      for (int i = 0; i < camposLidos; i++) free(info[i]);
+      free(info);
+      continue;
+    }
 
-    nLinhasLidas++;
-
-    for (int i = 0; i < nCamposLidos; i++) {
+    for (int i = 0; i < camposLidos; i++) {
       if (i == 0 && strcmp(info[i], nome) == 0) {
         found = true;
         break;
@@ -687,7 +796,7 @@ void alterarUtente() {
       break;
     }
 
-    for (int i = 0; i < nCamposLidos; i++) free(info[i]);
+    for (int i = 0; i < camposLidos; i++) free(info[i]);
 
     free(info);
   }
@@ -832,25 +941,7 @@ void alterarUtente() {
   f = openUtentesFile("a+", "ab+");
 
   // Adicionar o utente atualizado
-  fprintf(
-    f,
-    "\n%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s",
-    info[0],
-    info[1],
-    info[2],
-    info[3],
-    info[4],
-    info[5],
-    info[6],
-    info[7],
-    info[8],
-    info[9],
-    info[10],
-    info[11],
-    info[12],
-    info[13],
-    info[14]
-  );
+  fprintf(f, "\n%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s", info[0], info[1], info[2], info[3], info[4], info[5], info[6], info[7], info[8], info[9], info[10], info[11], info[12], info[13], info[14]);
 
   for (int i = 0; i < N_CAMPOS_UTENTES; i++) free(info[i]);
   free(info);
@@ -893,9 +984,10 @@ void startAlimentosInteractiveMenu() {
         " 2 - inserir\n"
         " 3 - alterar\n"
         " 4 - eliminar\n"
+        " 5 - listar\n"
         " 0 - voltar\n");
     scanf("%hd", &option);
-  } while (option > 4 || option < 0);
+  } while (option > 5 || option < 0);
 
   clearTerminal();
 
@@ -911,6 +1003,9 @@ void startAlimentosInteractiveMenu() {
       break;
     case 4:
       eliminarAlimento();
+      break;
+    case 5:
+      listarAlimentos();
       break;
     case 0:  // voltar
       startInteractiveMenu();
