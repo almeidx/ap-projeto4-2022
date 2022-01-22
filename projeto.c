@@ -5,6 +5,7 @@
 
 #define STRING_LENGTH 150
 #define TAMANHO_NOME 50
+
 #define MAX_ALIMENTOS 10
 #define N_REFEICOES 10
 
@@ -12,13 +13,10 @@
 #define N_CAMPOS_UTENTES 15
 
 #define FICHEIRO_ALIMENTOS "Alimentos.txt"
-
 #define FICHEIRO_UTENTES_TXT "Pessoas.txt"
 #define FICHEIRO_UTENTES_DAT "Pessoas.dat"
-
 #define FICHEIRO_MENUS_TXT "Menus.txt"
 #define FICHEIRO_MENUS_DAT "Menus.dat"
-
 #define FICHEIRO_TMP_TXT "tmp.txt"
 #define FICHEIRO_TMP_DAT "tmp.dat"
 
@@ -26,14 +24,21 @@ typedef enum Boolean { false, true } bool;
 typedef char LinhaTexto[STRING_LENGTH];
 
 LinhaTexto LT;
-bool useTextFileForProdutos = false;
+bool useTextFileForUtentes = false;
 
+// Função de utilidade para limpar o terminal
 void clearTerminal() {
   #ifdef _WIN32 // Se for um sistema Windows
   system("cls");
   #else // Se não
   system("clear");
   #endif
+}
+
+// Função de utilidade para dar free à memória de um array de strings
+void freeArrayOfStrings(char **str, int n) {
+  for (int i = 0; i < n; i++) free(str[n]);
+  free(str);
 }
 
 // Usar #pragma para definir regiões para ser mais fácil navegar o ficheiro
@@ -124,24 +129,6 @@ char **splitLine(FILE *f, int n_campos_max, int *n_campos_lidos,
   return NULL;
 };
 
-void readFileContent(FILE *f, char **str, long *length) {
-  // Mover o ponteiro para o fim do ficheiro
-  fseek(f, 0, SEEK_END);
-  *length = ftell(f);
-  // Voltar para o início
-  fseek(f, 0, SEEK_SET);
-
-  // Alocar memória necessária consoante o tamanho do ficheiro
-  *str = calloc(*length, sizeof(char **));
-  if (*str == NULL) {
-    printf("Fatal: Failed to allocate memory for file content\n");
-    exit(EXIT_FAILURE);
-  }
-
-  // Ler o conteudo do ficheiro para a memória alocada
-  fread(*str, sizeof(char **), *length, f);
-}
-
 FILE *openFile(char *fileName, char *mode) {
   FILE *f = fopen(fileName, mode);
 
@@ -153,25 +140,12 @@ FILE *openFile(char *fileName, char *mode) {
   return f;
 }
 
-void cloneFile(char *source, char *target) {
-  char currentChar;
-  FILE *sourceFile = openFile(source, "r"), *targetFile = openFile(target, "w");
-
-  do {
-    currentChar = fgetc(sourceFile);
-    fputc(currentChar, targetFile);
-  } while (currentChar != EOF);
-
-  fclose(sourceFile);
-  fclose(targetFile);
-}
-
 #pragma endregion
 
 #pragma region Alimentos
 
 /*
-  Grupos:
+  Grupos de Alimentos:
   1. Fruta;
   2. Gorduras e Óleos;
   3. Lacticínios;
@@ -180,9 +154,26 @@ void cloneFile(char *source, char *target) {
   6. Cereais e derivados e Tubérculos;
   7. Hortícolas;
   8. Outros.
+
+  Tipos de Refeições:
+  1. Pequeno Almoço; (1, 3, 6)
+  2. Almoco; (1, 2, 4, 5, 6, 7, 8)
+  3. Lanche; (1, 3, 6)
+  4. Jantar; (1, 2, 4, 5, 6, 7, 8)
+  5. Ceia; (1, 3, 6)
+  6. Outra. (1, 2, 3, 4, 5, 6, 7, 8)
 */
 
-// Retorna 1 se o alimento foi encontrado
+/*
+ * A maneira de como esta função funciona é:
+ *  - cria um ficheiro temporário e vai de linha a linha, copiando todos os alimentos
+ *    do ficheiro principal para o temporário
+ *  - quando encontrar o alimento que é para eliminar, simplesmente não vai copiar
+ *    para o ficheiro temporário
+ *  - no final, damos overwrite do ficheiro normal com o conteudo do ficheiro temporário
+ *
+ * Caso o alimento seja encontrado, retorna true. Se não for encontrado, retorna false.
+ */
 bool deleteAlimento(FILE *f, char *nome) {
   FILE *tmpFile = openFile(FICHEIRO_TMP_TXT, "w+");
 
@@ -196,8 +187,7 @@ bool deleteAlimento(FILE *f, char *nome) {
   while (!feof(f)) {
     info = splitLine(f, N_CAMPOS_ALIMENTOS, &camposLidos, ";");
     if (camposLidos < N_CAMPOS_ALIMENTOS) {
-      for (int i = 0; i < camposLidos; i++) free(info[i]);
-      free(info);
+      freeArrayOfStrings(info, camposLidos);
       continue;
     }
 
@@ -229,11 +219,10 @@ bool deleteAlimento(FILE *f, char *nome) {
       fputs(line, tmpFile);
     }
 
-    // Fazer o 'reset' das variáveis temporárias
+    // Fazer o 'reset' das variáveis temporárias para passar à próxima linha
     strcpy(line, "");
     ignore = false;
-    for (int i = 0; i < camposLidos; i++) free(info[i]);
-    free(info);
+    freeArrayOfStrings(info, camposLidos);
   }
 
   fclose(tmpFile);
@@ -256,6 +245,8 @@ void consultarAlimentos() {
   printf("Qual é o nome do alimento que deseja consultar?\n");
   scanf("%s", nome);
 
+  clearTerminal();
+
   int camposLidos;
   bool found = false;
   char **line;
@@ -263,15 +254,12 @@ void consultarAlimentos() {
   while (!feof(f)) {
     line = splitLine(f, N_CAMPOS_ALIMENTOS, &camposLidos, ";");
     if (camposLidos < N_CAMPOS_ALIMENTOS) {
-      for (int i = 0; i < camposLidos; i++) free(line[i]);
-      free(line);
+      freeArrayOfStrings(line, camposLidos);
       continue;
     }
 
     for (int i = 0; i < camposLidos; i++) {
       if (i == 0 && strcmp(line[i], nome) == 0) {
-        clearTerminal();
-
         printf("Nome: %s\n", line[0]);
         printf("Calorias (KCal): %s\n", line[1]);
         printf("Proteínas (g): %s\n", line[2]);
@@ -284,10 +272,7 @@ void consultarAlimentos() {
       }
     }
 
-    for (int i = 0; i < camposLidos; i++) free(line[i]);
-
-    free(line);
-
+    freeArrayOfStrings(line, camposLidos);
     if (found) break;
   }
 
@@ -323,8 +308,7 @@ void inserirAlimento() {
   printf("Qual é a quantidade de hidratos de carbono do alimento?\n");
   scanf("%f", &hidratosCarbono);
 
-  fprintf(f, "%s;%f;%f;%f;%f;%d\n", nome, calorias, proteinas, gordura,
-          hidratosCarbono, grupo);
+  fprintf(f, "%s;%f;%f;%f;%f;%d\n", nome, calorias, proteinas, gordura, hidratosCarbono, grupo);
 
   fclose(f);
 }
@@ -344,8 +328,7 @@ void alterarAlimento() {
   while (!feof(f)) {
     info = splitLine(f, N_CAMPOS_ALIMENTOS, &camposLidos, ";");
     if (camposLidos < N_CAMPOS_ALIMENTOS) {
-      for (int i = 0; i < camposLidos; i++) free(info[i]);
-      free(info);
+      freeArrayOfStrings(info, camposLidos);
       continue;
     }
 
@@ -360,13 +343,11 @@ void alterarAlimento() {
       break;
     }
 
-    for (int i = 0; i < camposLidos; i++) free(info[i]);
-
-    free(info);
+    freeArrayOfStrings(info, camposLidos);
   }
 
   if (!found) {
-    printf("Alimento não encontrado.\n");
+    printf("Alimento '%s' não encontrado.\n", nome);
     return;
   }
 
@@ -384,8 +365,6 @@ void alterarAlimento() {
 
     scanf("%hd", &option);
   } while (option < 0 || option > 6);
-
-  // cloneFile(FICHEIRO_ALIMENTOS, FICHEIRO_TMP_TXT);
 
   // ALIMENTOS;CALORIAS(KCal);PROTEINAS(g);GORDURAS(g);H.CARBONO(g);Grupo
 
@@ -433,15 +412,16 @@ void alterarAlimento() {
   // Apagar o alimento anterior
   deleteAlimento(f, nome);
 
+  // Fechar para abrir novamente em modo 'append'
   fclose(f);
 
+  // Abrir em modo 'append'
   f = openFile(FICHEIRO_ALIMENTOS, "a");
 
   // Adicionar o alimento atualizado
   fprintf(f, "\n%s;%s;%s;%s;%s;%s", info[0], info[1], info[2], info[3], info[4], info[5]);
 
-  for (int i = 0; i < N_CAMPOS_ALIMENTOS; i++) free(info[i]);
-  free(info);
+  freeArrayOfStrings(info, camposLidos);
   fclose(f);
 }
 
@@ -493,19 +473,66 @@ void gerarRefeicoes() {
   printf("Qual é o mínimo e máximo de calorias que pretende ingerir (min/max)?\n");
   scanf("%f/%f", &menu.minProteinas, &menu.maxProteinas);
 
+  clearTerminal();
+
   printf("Qual é a quantidade de gorduras?\n");
   scanf("%f", &menu.gorduras);
 
   printf("Qual é a quantidade de hidratos de carbono?\n");
   scanf("%f", &menu.hidratosCarbono);
 
+  clearTerminal();
+
   short minimoCategorias;
   do {
-    printf("Qual é o minimo de categorias a incluir na refeição?\n");
+    printf("Qual é o minimo de categorias de alimentos a incluir na refeição?\n");
     scanf("%hd", &minimoCategorias);
   } while (minimoCategorias < 1 || minimoCategorias > 10);
 
+  clearTerminal();
 
+  FILE *f = openFile(FICHEIRO_ALIMENTOS, "r");
+
+  int camposLidos;
+  char **line;
+
+  /*
+    Gerar um conjunto de 10 refeições do tipo indicado pelo utilizador e com as calorias que pretende
+    ingerir, atendendo igualmente ao mínimo e máximo de Proteínas, Gorduras e H. Carbono
+    especificados e ao mínimo de categorias de alimentos a incluir, devendo, cada proposta,
+    aproximarse ao máximo das especificações indicadas pela pessoa;
+  */
+
+  int totalCalorias = 0;
+
+  for (int i = 0; i < N_REFEICOES; i++) {
+    // Mover o ponteiro para o inicio do ficheiro em cada iteração
+    fseek(f, 0, SEEK_SET);
+
+    while (!feof(f)) {
+      line = splitLine(f, N_CAMPOS_ALIMENTOS, &camposLidos, ";");
+      if (camposLidos < N_CAMPOS_ALIMENTOS) {
+        freeArrayOfStrings(line, camposLidos);
+        continue;
+      }
+
+      // Função para converter string to int
+      // https://www.educative.io/edpresso/how-to-convert-a-string-to-an-integer-in-c
+      int caloriasInt = atoi(line[1]);
+
+      // Caso ultrapasse o máximo de calorias, cancelar
+      if (totalCalorias + caloriasInt > menu.kCalorias) {
+        freeArrayOfStrings(line, camposLidos);
+        break;
+      }
+
+      // TODO
+
+      freeArrayOfStrings(line, camposLidos);
+    }
+  }
+
+  fclose(f);
 }
 
 void listarAlimentos() {
@@ -535,42 +562,31 @@ void listarAlimentos() {
   fclose(f);
 }
 
-void displayTop() {
-
-}
-
 #pragma endregion
 
 #pragma region Utentes
 
-// typedef struct Data {
-//   unsigned int ano, mes, dia;
-// } DATA;
-
-// typedef struct IndiceColesterol {
-//   int total, hdl, ldl;
-// } INDICE_COLESTEROL;
-
-// typedef struct Pessoa {
-//   unsigned int cc;
-//   char nome[TAMANHO_NOME], morada[STRING_LENGTH], localidade[STRING_LENGTH];
-//   DATA dataNascimento;
-//   unsigned int codigoPostal, telefone, peso, altura, pressaoArterial;
-//   INDICE_COLESTEROL indiceColesterol;
-// } PESSOA;
-
 // NOME;CC;DIA;MES;ANO;MORADA;LOCALIDADE;CODIGO_POSTAL;TELEFONE;PESO;ALTURA;PRESAO_ARTERIAL;COLESTEROL_TOTAL;COLESTEROL_HDL;COLESTEROL_LDL
 
+// Abre o ficheiro de utentes consoante o tipo de ficheiro selecionado pelo utilizador
 FILE *openUtentesFile(char *txtMode, char *binMode) {
-  if (useTextFileForProdutos) return openFile(FICHEIRO_UTENTES_TXT, txtMode);
+  if (useTextFileForUtentes) return openFile(FICHEIRO_UTENTES_TXT, txtMode);
   return openFile(FICHEIRO_UTENTES_DAT, binMode);
 }
 
-// Função identica a deleteAlimento(), mas adaptada para funcionar com utentes
-// Retorna 1 se o utente foi encontrado
+/*
+ * A maneira de como esta função funciona é:
+ *  - cria um ficheiro temporário consoante o tipo de ficheiro selecionado pelo utilizador
+ *    e vai de linha a linha, copiando todos os utentes do ficheiro principal para o temporário
+ *  - quando encontrar o utento que é para eliminar, simplesmente não vai copiar
+ *    para o ficheiro temporário
+ *  - no final, damos overwrite do ficheiro normal com o conteudo do ficheiro temporário
+ *
+ * Caso o utente seja encontrado, retorna true. Se não for encontrado, retorna false.
+ */
 bool deleteUtente(FILE *f, char *nome) {
   FILE *tmpFile;
-  if (useTextFileForProdutos) {
+  if (useTextFileForUtentes) {
     tmpFile = openFile(FICHEIRO_TMP_TXT, "w+");
   } else {
     tmpFile = openFile(FICHEIRO_TMP_DAT, "wb+");
@@ -586,8 +602,7 @@ bool deleteUtente(FILE *f, char *nome) {
   while (!feof(f)) {
     info = splitLine(f, N_CAMPOS_UTENTES, &camposLidos, ";");
     if (camposLidos < N_CAMPOS_UTENTES) {
-      for (int i = 0; i < camposLidos; i++) free(info[i]);
-      free(info);
+      freeArrayOfStrings(info, camposLidos);
       continue;
     }
 
@@ -622,21 +637,20 @@ bool deleteUtente(FILE *f, char *nome) {
     // Fazer o 'reset' das variáveis temporárias
     strcpy(line, "");
     ignore = false;
-    for (int i = 0; i < camposLidos; i++) free(info[i]);
-    free(info);
+    freeArrayOfStrings(info, camposLidos);
   }
 
   fclose(tmpFile);
 
   // Reescrever o ficheiro de utentes com o conteudo do ficheiro temporário
   if (found) {
-    if (useTextFileForProdutos) {
+    if (useTextFileForUtentes) {
       rename(FICHEIRO_TMP_TXT, FICHEIRO_UTENTES_TXT);
     } else {
       rename(FICHEIRO_TMP_DAT, FICHEIRO_UTENTES_DAT);
     }
   } else {
-    if (useTextFileForProdutos) {
+    if (useTextFileForUtentes) {
       remove(FICHEIRO_TMP_TXT);
     } else {
       remove(FICHEIRO_TMP_DAT);
@@ -654,6 +668,8 @@ void consultarUtentes() {
   printf("Qual é o nome do utente que deseja consultar?\n");
   scanf("%s", nome);
 
+  clearTerminal();
+
   int camposLidos;
   bool found = false;
   char **line;
@@ -661,15 +677,12 @@ void consultarUtentes() {
   while (!feof(f)) {
     line = splitLine(f, N_CAMPOS_UTENTES, &camposLidos, ";");
     if (camposLidos < N_CAMPOS_UTENTES) {
-      for (int i = 0; i < camposLidos; i++) free(line[i]);
-      free(line);
+      freeArrayOfStrings(line, camposLidos);
       continue;
     }
 
     for (int i = 0; i < camposLidos; i++) {
       if (i == 0 && strcmp(line[i], nome) == 0) {
-        clearTerminal();
-
         // NOME;CC;DIA;MES;ANO;MORADA;LOCALIDADE;CODIGO_POSTAL;TELEFONE;PESO;ALTURA;PRESAO_ARTERIAL;COLESTEROL_TOTAL;COLESTEROL_HDL;COLESTEROL_LDL
         printf("Nome: %s\n", line[0]);
         printf("Cartão de Cidadão: %s\n", line[1]);
@@ -688,10 +701,7 @@ void consultarUtentes() {
       }
     }
 
-    for (int i = 0; i < camposLidos; i++) free(line[i]);
-
-    free(line);
-
+    freeArrayOfStrings(line, camposLidos);
     if (found) break;
   }
 
@@ -780,8 +790,7 @@ void alterarUtente() {
   while (!feof(f)) {
     info = splitLine(f, N_CAMPOS_UTENTES, &camposLidos, ";");
     if (camposLidos < N_CAMPOS_UTENTES) {
-      for (int i = 0; i < camposLidos; i++) free(info[i]);
-      free(info);
+      freeArrayOfStrings(info, camposLidos);
       continue;
     }
 
@@ -792,13 +801,8 @@ void alterarUtente() {
       }
     }
 
-    if (found) {
-      break;
-    }
-
-    for (int i = 0; i < camposLidos; i++) free(info[i]);
-
-    free(info);
+    if (found) break;
+    freeArrayOfStrings(info, camposLidos);
   }
 
   if (!found) {
@@ -834,21 +838,23 @@ void alterarUtente() {
 
   clearTerminal();
 
-  //  0 NOME
-  //  1 CC
-  //  2 DIA
-  //  3 MES
-  //  4 ANO
-  //  5 MORADA
-  //  6 LOCALIDADE
-  //  7 CODIGO_POSTAL
-  //  8 TELEFONE
-  //  9 PESO
-  // 10 ALTURA
-  // 11 PRESAO_ARTERIAL
-  // 12 COLESTEROL_TOTAL
-  // 13 COLESTEROL_HDL
-  // 14 COLESTEROL
+  /*
+     0 NOME
+     1 CC
+     2 DIA
+     3 MES
+     4 ANO
+     5 MORADA
+     6 LOCALIDADE
+     7 CODIGO_POSTAL
+     8 TELEFONE
+     9 PESO
+    10 ALTURA
+    11 PRESAO_ARTERIAL
+    12 COLESTEROL_TOTAL
+    13 COLESTEROL_HDL
+    14 COLESTEROL
+  */
 
   switch (option) {
     case 1: // Nome
@@ -919,9 +925,8 @@ void alterarUtente() {
       break;
     }
     case 0: // Voltar
+      freeArrayOfStrings(info, camposLidos);
       fclose(f);
-      for (int i = 0; i < N_CAMPOS_UTENTES; i++) free(info[i]);
-      free(info);
       return;
   }
 
@@ -936,6 +941,7 @@ void alterarUtente() {
   // Apagar o utente anterior
   deleteUtente(f, nome);
 
+  // Fechar o ficheiro para abrir em modo de 'append'
   fclose(f);
 
   f = openUtentesFile("a+", "ab+");
@@ -943,8 +949,7 @@ void alterarUtente() {
   // Adicionar o utente atualizado
   fprintf(f, "\n%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s", info[0], info[1], info[2], info[3], info[4], info[5], info[6], info[7], info[8], info[9], info[10], info[11], info[12], info[13], info[14]);
 
-  for (int i = 0; i < N_CAMPOS_UTENTES; i++) free(info[i]);
-  free(info);
+  freeArrayOfStrings(info, camposLidos);
   fclose(f);
 }
 
@@ -963,14 +968,15 @@ void eliminarUtente() {
   } else {
     printf("Não foi possível eliminar o utente com o nome '%s'.\n", nome);
   }
+
+  fclose(f);
 }
 
 #pragma endregion
 
 #pragma region InteractiveMenu
 
-// Isto é necessário porque as duas funções chamam uma à outra em certas
-// condições
+// Isto é necessário porque as duas funções se chamam uma à outra em certas condições
 void startInteractiveMenu();
 
 void startAlimentosInteractiveMenu() {
@@ -1008,7 +1014,6 @@ void startAlimentosInteractiveMenu() {
       listarAlimentos();
       break;
     case 0:  // voltar
-      startInteractiveMenu();
       return;
   }
 }
@@ -1044,7 +1049,6 @@ void startUtentesInteractiveMenu() {
       eliminarUtente();
       break;
     case 0:  // voltar
-      startInteractiveMenu();
       return;
   }
 }
@@ -1078,20 +1082,24 @@ void startInteractiveMenu() {
       } while (strcmp(tipoFicheiro, "txt") != 0 && strcmp(tipoFicheiro, "dat") != 0);
 
       if (strcmp(tipoFicheiro, "txt") == 0) {
-        useTextFileForProdutos = true;
+        useTextFileForUtentes = true;
       }
 
       startUtentesInteractiveMenu();
-
       break;
     }
 
     case 3:  // gerar refeições
+      gerarRefeicoes();
       break;
 
     case 0:
+      exit(0);
       return;
   }
+
+  // Caso chegue a este ponto, o utilizador deve ter usado a opção para 'voltar'
+  startInteractiveMenu();
 }
 
 #pragma endregion
