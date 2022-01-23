@@ -5,3 +5,4 @@
 *.dat
 projeto
 !projeto.c
+!Alimentos.txt

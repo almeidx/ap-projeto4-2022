@@ -9,5 +9,5 @@
   "C_Cpp.vcFormat.newLine.beforeOpenBrace.type": "sameLine",
   "C_Cpp.vcFormat.newLine.closeBraceSameLine.emptyType": true,
   "C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: Google, IndentWidth: 2, AllowShortFunctionsOnASingleLine: Empty, ColumnLimit: 120 }",
-  "editor.rulers": [120]
+  "editor.rulers": [120],
 }
