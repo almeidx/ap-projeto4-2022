@@ -28,11 +28,11 @@ bool useTextFileForUtentes = false;
 
 // Função de utilidade para limpar o terminal
 void clearTerminal() {
-  #ifdef _WIN32 // Se for um sistema Windows
+#ifdef _WIN32  // Se for um sistema Windows
   system("cls");
-  #else // Se não
+#else  // Se não
   system("clear");
-  #endif
+#endif
 }
 
 // Função de utilidade para dar free à memória de um array de strings
@@ -54,11 +54,16 @@ typedef struct IndiceColesterol {
   int total, hdl, ldl;
 } INDICE_COLESTEROL;
 
+typedef struct PressaoArterial {
+  unsigned int min, max;
+} PRESSAO_ARTERIAL;
+
 typedef struct Pessoa {
   unsigned int cc;
   char nome[TAMANHO_NOME], morada[STRING_LENGTH], localidade[STRING_LENGTH];
   DATA dataNascimento;
-  unsigned int codigoPostal, telefone, peso, altura, pressaoArterial;
+  unsigned int codigoPostal, telefone, peso, altura;
+  PRESSAO_ARTERIAL pressaoArterial;
   INDICE_COLESTEROL indiceColesterol;
 } PESSOA;
 
@@ -77,10 +82,39 @@ typedef struct Menu {
   // 1-Pequeno Almoço, A-Almoço, 3-Lanche, 4-Jantar, 5-Ceia, 6-Outra
   unsigned short refeicaoDoDia;
   float kCalorias, minProteinas, maxProteinas, gorduras, hidratosCarbono;
-  REFEICAO refeicao[N_REFEICOES];
+  REFEICAO refeicoes[N_REFEICOES];
 } MENU;
 
 #pragma endregion
+
+/*
+ * Função que valida se uma data é válida.
+ * O ano mínimo e máximo aceitável é 1900 e 2050, respetivamente.
+ * Leva em conta se o ano é bissexto ou não.
+ * Retorna true se a data for valida. Se não, retorna false.
+ */
+bool validarData(DATA data) {
+  // Verificar limites genericos
+  if (data.ano < 1900 || data.ano > 2050 || data.mes < 1 || data.mes > 12 || data.dia < 1 || data.dia > 31) {
+    return false;
+  }
+
+  // Verificar o dia máximo de fevereiro consoante se o ano é bissexto
+  if (data.mes == 2) {
+    if (data.ano % 4 == 0) {
+      if (data.dia > 29) return false;
+    } else {
+      if (data.dia > 28) return false;
+    }
+  }
+
+  // Verificar o dia máximo nos meses com 30 dias
+  if ((data.mes == 4 || data.mes == 6 || data.mes == 9 || data.mes == 11) && data.dia > 30) {
+    return false;
+  }
+
+  return true;
+}
 
 #pragma region Files
 
@@ -101,24 +135,19 @@ typedef struct Menu {
     de quem invoca a função a libertação da memória alocada
   Autor: Francisco Morgado
 **/
-char **splitLine(FILE *f, int n_campos_max, int *n_campos_lidos,
-                 char *separadores) {
+char **splitLine(FILE *f, int n_campos_max, int *n_campos_lidos, char *separadores) {
   *n_campos_lidos = 0;
 
-  if (fgets(LT, STRING_LENGTH, f) !=
-      NULL)  // fgets lê uma linha do ficheiro de texto para a string LT
+  if (fgets(LT, STRING_LENGTH, f) != NULL)  // fgets lê uma linha do ficheiro de texto para a string LT
   {
     // "partir" a linha lida, usando os separadores definidos
-    char **Res = (char **)malloc(
-        n_campos_max * sizeof(char *));  // alocação de um array com
-                                         // n_campos_max ponteiros para STRING
+    char **Res = (char **)malloc(n_campos_max * sizeof(char *));  // alocação de um array com
+                                                                  // n_campos_max ponteiros para STRING
     char *pch = strtok(LT, separadores);
     int cont = 0;
     while (pch != NULL) {
-      Res[cont] = (char *)malloc(
-          (strlen(pch) + 1) *
-          sizeof(char));  // alocação do espaço necessário para guardar a string
-                          // correspondente ao campo
+      Res[cont] = (char *)malloc((strlen(pch) + 1) * sizeof(char));  // alocação do espaço necessário para guardar a
+                                                                     // string correspondente ao campo
       strcpy(Res[cont++], pch);
       pch = strtok(NULL, separadores);
     }
@@ -166,13 +195,15 @@ FILE *openFile(char *fileName, char *mode) {
 
 /*
  * A maneira de como esta função funciona é:
- *  - cria um ficheiro temporário e vai de linha a linha, copiando todos os alimentos
- *    do ficheiro principal para o temporário
- *  - quando encontrar o alimento que é para eliminar, simplesmente não vai copiar
- *    para o ficheiro temporário
- *  - no final, damos overwrite do ficheiro normal com o conteudo do ficheiro temporário
+ *  - cria um ficheiro temporário e vai de linha a linha, copiando todos os
+ * alimentos do ficheiro principal para o temporário
+ *  - quando encontrar o alimento que é para eliminar, simplesmente não vai
+ * copiar para o ficheiro temporário
+ *  - no final, damos overwrite do ficheiro normal com o conteudo do ficheiro
+ * temporário
  *
- * Caso o alimento seja encontrado, retorna true. Se não for encontrado, retorna false.
+ * Caso o alimento seja encontrado, retorna true. Se não for encontrado, retorna
+ * false.
  */
 bool deleteAlimento(FILE *f, char *nome) {
   FILE *tmpFile = openFile(FICHEIRO_TMP_TXT, "w+");
@@ -200,7 +231,8 @@ bool deleteAlimento(FILE *f, char *nome) {
 
       // Contatenar todas as strings que foram separadas pela função splitLine
       if (!ignore) {
-        // A função strcat() estava a deixar alguns caracteres nulos no inicio da linha por algum motivo
+        // A função strcat() estava a deixar alguns caracteres nulos no inicio
+        // da linha por algum motivo
         if (i == 0) {
           strcpy(line, info[0]);
         } else {
@@ -214,7 +246,8 @@ bool deleteAlimento(FILE *f, char *nome) {
       }
     }
 
-    // Se não for para ignorar, copiar o conteudo da linha para o ficheiro temporário
+    // Se não for para ignorar, copiar o conteudo da linha para o ficheiro
+    // temporário
     if (!ignore) {
       fputs(line, tmpFile);
     }
@@ -373,31 +406,31 @@ void alterarAlimento() {
   clearTerminal();
 
   switch (option) {
-    case 1: // Nome
+    case 1:  // Nome
       printf("Qual é o novo nome do alimento?\n");
       scanf("%s", newItem);
       break;
-    case 2: // Calorias
+    case 2:  // Calorias
       printf("Qual é a nova quantidade de calorias do alimento (KCal)?\n");
       scanf("%s", newItem);
       break;
-    case 3: // Proteínas
+    case 3:  // Proteínas
       printf("Qual é a nova quantidade de proteínas do alimento (g)?\n");
       scanf("%s", newItem);
       break;
-    case 4: // Gorduras
+    case 4:  // Gorduras
       printf("Qual é a nova quantidade de gorduras do alimento (g)?\n");
       scanf("%s", newItem);
       break;
-    case 5: // Hidratos de Carbono
+    case 5:  // Hidratos de Carbono
       printf("Qual é a nova quantidade de hidratos de carbono do alimento (g)?\n");
       scanf("%s", newItem);
       break;
-    case 6: // Grupo
+    case 6:  // Grupo
       printf("Qual é o novo grupo do alimento (nº)?\n");
       scanf("%s", newItem);
       break;
-    case 0: // Voltar
+    case 0:  // Voltar
       fclose(f);
       for (int i = 0; i < N_CAMPOS_ALIMENTOS; i++) free(info[i]);
       free(info);
@@ -442,25 +475,83 @@ void eliminarAlimento() {
   }
 }
 
+void listarAlimentos() {
+  FILE *f = openFile(FICHEIRO_ALIMENTOS, "r");
+
+  int camposLidos;
+  char **line;
+
+  clearTerminal();
+
+  while (!feof(f)) {
+    line = splitLine(f, N_CAMPOS_ALIMENTOS, &camposLidos, ";");
+    if (camposLidos < N_CAMPOS_ALIMENTOS) {
+      for (int i = 0; i < camposLidos; i++) free(line[i]);
+      free(line);
+      continue;
+    }
+
+    printf("\n%s | %s | %s | %s | %s | %s", line[0], line[1], line[2], line[3], line[4], line[5]);
+
+    for (int i = 0; i < camposLidos; i++) free(line[i]);
+    free(line);
+  }
+
+  printf("\n");
+
+  fclose(f);
+}
+
+#pragma endregion
+
+#pragma region Menus
+
+/*
+ * 1. Pequeno Almoço; (1, 3, 6)
+ * 2. Almoco; (1, 2, 4, 5, 6, 7, 8)
+ * 3. Lanche; (1, 3, 6)
+ * 4. Jantar; (1, 2, 4, 5, 6, 7, 8)
+ * 5. Ceia; (1, 3, 6)
+ * 6. Outra. (1, 2, 3, 4, 5, 6, 7, 8)
+ */
+bool alimentoIncluidoNoTipoDeRefeicao(int grupoAlimento, int tipoDeRefeicao) {
+  switch (tipoDeRefeicao) {
+    case 1:
+    case 3:
+    case 5:
+      return grupoAlimento == 1 || grupoAlimento == 3 || grupoAlimento == 6;
+    case 2:
+    case 4:
+      return grupoAlimento == 1 || grupoAlimento == 2 || (grupoAlimento >= 4 && grupoAlimento <= 8);
+    case 6:
+      return grupoAlimento >= 1 && grupoAlimento <= 8;
+    default:
+      return false;
+  }
+}
+
 void gerarRefeicoes() {
   MENU menu;
+
   printf("Qual é o número de cartão de cidadão da pessoa?\n");
   scanf("%u", &menu.cc);
 
-  DATA data;
-  printf("Qual é a data da refeição (dd/mm/yyyy; e.g. 3/4/2022)?\n");
-  scanf("%d/%d/%d", &menu.dataRefeicao.dia, &menu.dataRefeicao.mes, &menu.dataRefeicao.ano);
+  do {
+    printf("Qual é a data da refeição (dd/mm/yyyy; e.g. 3/4/2022)?\n");
+    scanf("%d/%d/%d", &menu.dataRefeicao.dia, &menu.dataRefeicao.mes, &menu.dataRefeicao.ano);
+  } while (!validarData(menu.dataRefeicao));
 
   clearTerminal();
 
   do {
-    printf("Qual é o tipo de refeição que quer?\n"
-      "1 - Pequeno Almoço\n"
-      "2 - Almoço\n"
-      "3 - Lanche\n"
-      "4 - Jantar\n"
-      "5 - Ceia\n"
-      "6 - Outra\n");
+    printf(
+        "Qual é o tipo de refeição que quer?\n"
+        " 1 - Pequeno Almoço\n"
+        " 2 - Almoço\n"
+        " 3 - Lanche\n"
+        " 4 - Jantar\n"
+        " 5 - Ceia\n"
+        " 6 - Outra\n");
 
     scanf("%hd", &menu.refeicaoDoDia);
   } while (menu.refeicaoDoDia < 1 || menu.refeicaoDoDia > 6);
@@ -493,17 +584,16 @@ void gerarRefeicoes() {
 
   FILE *f = openFile(FICHEIRO_ALIMENTOS, "r");
 
-  int camposLidos;
+  int camposLidos, totalCalorias = 0, totalProteinas = 0, totalGorduras = 0, totalHidratosCarbono = 0, categorias = 0;
   char **line;
 
   /*
-    Gerar um conjunto de 10 refeições do tipo indicado pelo utilizador e com as calorias que pretende
-    ingerir, atendendo igualmente ao mínimo e máximo de Proteínas, Gorduras e H. Carbono
-    especificados e ao mínimo de categorias de alimentos a incluir, devendo, cada proposta,
-    aproximarse ao máximo das especificações indicadas pela pessoa;
+    Gerar um conjunto de 10 refeições do tipo indicado pelo utilizador e com as
+    calorias que pretende ingerir, atendendo igualmente ao mínimo e máximo de
+    Proteínas, Gorduras e H. Carbono especificados e ao mínimo de categorias de
+    alimentos a incluir, devendo, cada proposta, aproximarse ao máximo das
+    especificações indicadas pela pessoa;
   */
-
-  int totalCalorias = 0;
 
   for (int i = 0; i < N_REFEICOES; i++) {
     // Mover o ponteiro para o inicio do ficheiro em cada iteração
@@ -516,17 +606,33 @@ void gerarRefeicoes() {
         continue;
       }
 
-      // Função para converter string to int
+      // atoi(): Função para converter string para int
       // https://www.educative.io/edpresso/how-to-convert-a-string-to-an-integer-in-c
-      int caloriasInt = atoi(line[1]);
+      int grupo = atoi(line[5]);
 
-      // Caso ultrapasse o máximo de calorias, cancelar
-      if (totalCalorias + caloriasInt > menu.kCalorias) {
-        freeArrayOfStrings(line, camposLidos);
-        break;
+      if (alimentoIncluidoNoTipoDeRefeicao(grupo, menu.refeicaoDoDia)) {
+        int calorias = atoi(line[2]);
+
+        // atof(): Função para converter string para float (basicamente o mesmo que o atoi())
+        // https://stackoverflow.com/a/7951034/11252146
+        float proteina = atof(line[3]), gordura = atof(line[4]), hidratosCarbono = atof(line[6]);
+
+        // Caso ultrapasse um dos limites, passar ao próximo alimento
+        if ((totalCalorias + calorias > menu.kCalorias) || (totalProteinas + proteina > menu.maxProteinas) ||
+            (totalGorduras + gordura > menu.gorduras) ||
+            (totalHidratosCarbono + hidratosCarbono > menu.hidratosCarbono)) {
+          freeArrayOfStrings(line, camposLidos);
+          continue;
+        }
+
+        strcpy(menu.refeicoes[i].alimentos[categorias].nome, line[0]);
+        menu.refeicoes[i].alimentos[categorias].quantidade = 1;
+
+        totalCalorias += calorias;
+        totalProteinas += proteina;
+        totalGorduras += gordura;
+        totalHidratosCarbono += hidratosCarbono;
       }
-
-      // TODO
 
       freeArrayOfStrings(line, camposLidos);
     }
@@ -535,40 +641,14 @@ void gerarRefeicoes() {
   fclose(f);
 }
 
-void listarAlimentos() {
-  FILE *f = openFile(FICHEIRO_ALIMENTOS, "r");
-
-  int camposLidos;
-  char **line;
-
-  clearTerminal();
-
-  while (!feof(f)) {
-    line = splitLine(f, N_CAMPOS_ALIMENTOS, &camposLidos, ";");
-    if (camposLidos < N_CAMPOS_ALIMENTOS) {
-      for (int i = 0; i < camposLidos; i++) free(line[i]);
-      free(line);
-      continue;
-    }
-
-    printf("\n%s | %s | %s | %s | %s | %s", line[0], line[1], line[2], line[3], line[4], line[5]);
-
-    for (int i = 0; i < camposLidos; i++) free(line[i]);
-    free(line);
-  }
-
-  printf("\n");
-
-  fclose(f);
-}
-
 #pragma endregion
 
 #pragma region Utentes
 
-// NOME;CC;DIA;MES;ANO;MORADA;LOCALIDADE;CODIGO_POSTAL;TELEFONE;PESO;ALTURA;PRESAO_ARTERIAL;COLESTEROL_TOTAL;COLESTEROL_HDL;COLESTEROL_LDL
+// NOME;CC;DIA;MES;ANO;MORADA;LOCALIDADE;CODIGO_POSTAL;TELEFONE;PESO;ALTURA;PRESAO_ARTERIAL_MIN;PRESAO_ARTERIAL_MAX;COLESTEROL_TOTAL;COLESTEROL_HDL;COLESTEROL_LDL
 
-// Abre o ficheiro de utentes consoante o tipo de ficheiro selecionado pelo utilizador
+// Abre o ficheiro de utentes consoante o tipo de ficheiro selecionado pelo
+// utilizador
 FILE *openUtentesFile(char *txtMode, char *binMode) {
   if (useTextFileForUtentes) return openFile(FICHEIRO_UTENTES_TXT, txtMode);
   return openFile(FICHEIRO_UTENTES_DAT, binMode);
@@ -576,13 +656,16 @@ FILE *openUtentesFile(char *txtMode, char *binMode) {
 
 /*
  * A maneira de como esta função funciona é:
- *  - cria um ficheiro temporário consoante o tipo de ficheiro selecionado pelo utilizador
- *    e vai de linha a linha, copiando todos os utentes do ficheiro principal para o temporário
+ *  - cria um ficheiro temporário consoante o tipo de ficheiro selecionado pelo
+ * utilizador e vai de linha a linha, copiando todos os utentes do ficheiro
+ * principal para o temporário
  *  - quando encontrar o utento que é para eliminar, simplesmente não vai copiar
  *    para o ficheiro temporário
- *  - no final, damos overwrite do ficheiro normal com o conteudo do ficheiro temporário
+ *  - no final, damos overwrite do ficheiro normal com o conteudo do ficheiro
+ * temporário
  *
- * Caso o utente seja encontrado, retorna true. Se não for encontrado, retorna false.
+ * Caso o utente seja encontrado, retorna true. Se não for encontrado, retorna
+ * false.
  */
 bool deleteUtente(FILE *f, char *nome) {
   FILE *tmpFile;
@@ -615,7 +698,8 @@ bool deleteUtente(FILE *f, char *nome) {
 
       // Contatenar todas as strings que foram separadas pela função splitLine
       if (!ignore) {
-        // A função strcat() estava a deixar alguns caracteres nulos no inicio da linha por algum motivo
+        // A função strcat() estava a deixar alguns caracteres nulos no inicio
+        // da linha por algum motivo
         if (i == 0) {
           strcpy(line, info[0]);
         } else {
@@ -629,7 +713,8 @@ bool deleteUtente(FILE *f, char *nome) {
       }
     }
 
-    // Se não for para ignorar, copiar o conteudo da linha para o ficheiro temporário
+    // Se não for para ignorar, copiar o conteudo da linha para o ficheiro
+    // temporário
     if (!ignore) {
       fputs(line, tmpFile);
     }
@@ -683,7 +768,7 @@ void consultarUtentes() {
 
     for (int i = 0; i < camposLidos; i++) {
       if (i == 0 && strcmp(line[i], nome) == 0) {
-        // NOME;CC;DIA;MES;ANO;MORADA;LOCALIDADE;CODIGO_POSTAL;TELEFONE;PESO;ALTURA;PRESAO_ARTERIAL;COLESTEROL_TOTAL;COLESTEROL_HDL;COLESTEROL_LDL
+        // NOME;CC;DIA;MES;ANO;MORADA;LOCALIDADE;CODIGO_POSTAL;TELEFONE;PESO;ALTURA;PRESAO_ARTERIAL_MIN;PRESAO_ARTERIAL_MAX;COLESTEROL_TOTAL;COLESTEROL_HDL;COLESTEROL_LDL
         printf("Nome: %s\n", line[0]);
         printf("Cartão de Cidadão: %s\n", line[1]);
         printf("Data de Nascimento (dd/mm/yyyy): %s/%s/%s\n", line[2], line[3], line[4]);
@@ -693,8 +778,8 @@ void consultarUtentes() {
         printf("Telefone: %s\n", line[8]);
         printf("Peso: %s\n", line[9]);
         printf("Altura: %s\n", line[10]);
-        printf("Presão Arterial: %s\n", line[11]);
-        printf("Colesterol (Total/HDL/LDL): %s/%s/%s\n", line[12], line[13], line[14]);
+        printf("Presão Arterial (min/max): %s/%s\n", line[11], line[12]);
+        printf("Colesterol (Total/HDL/LDL): %s/%s/%s\n", line[13], line[14], line[15]);
 
         found = true;
         break;
@@ -723,8 +808,14 @@ void inserirUtente() {
   printf("Qual é o nº do cartão de cidadão do utente?\n");
   scanf("%d", &pessoa.cc);
 
-  printf("Qual é a data de nascimento do utente (dd/mm/yyyy; e.g. 17/10/2000)?\n");
-  scanf("%d/%d/%d", &pessoa.dataNascimento.dia, &pessoa.dataNascimento.mes, &pessoa.dataNascimento.ano);
+  do {
+    printf(
+        "Qual é a data de nascimento do utente (dd/mm/yyyy; e.g. "
+        "17/10/2000)?\n");
+    scanf("%d/%d/%d", &pessoa.dataNascimento.dia, &pessoa.dataNascimento.mes, &pessoa.dataNascimento.ano);
+  } while (!validarData(pessoa.dataNascimento));
+
+  clearTerminal();
 
   printf("Qual é a morada do utente?\n");
   scanf("%s", pessoa.morada);
@@ -735,6 +826,8 @@ void inserirUtente() {
   printf("Qual é o código postal do utente?\n");
   scanf("%u", &pessoa.codigoPostal);
 
+  clearTerminal();
+
   printf("Qual é o telefone do utente?\n");
   scanf("%u", &pessoa.telefone);
 
@@ -744,33 +837,25 @@ void inserirUtente() {
   printf("Qual é a altura do utente?\n");
   scanf("%u", &pessoa.altura);
 
-  printf("Qual é a presão alterial do utente?\n");
-  scanf("%u", &pessoa.pressaoArterial);
+  clearTerminal();
+
+  do {
+    printf("Qual é a presão arterial do utente (min/max)?\n");
+    scanf("%u/%u", &pessoa.pressaoArterial.min, &pessoa.pressaoArterial.max);
+  } while (pessoa.pressaoArterial.min < 0 || pessoa.pressaoArterial.max < 0 ||
+           pessoa.pressaoArterial.min > pessoa.pressaoArterial.max);
 
   printf("Quais são os níveis de colesterol do utente (Total/HDL/LDL)?\n");
   scanf("%d/%d/%d", &pessoa.indiceColesterol.total, &pessoa.indiceColesterol.hdl, &pessoa.indiceColesterol.ldl);
 
-  fprintf(
-    f,
-    "%s;%d;%d;%d;%d;%s;%s;%u;%u;%u;%u;%u;%d;%d;%d",
-    pessoa.nome,
-    pessoa.cc,
-    pessoa.dataNascimento.dia,
-    pessoa.dataNascimento.mes,
-    pessoa.dataNascimento.ano,
-    pessoa.morada,
-    pessoa.localidade,
-    pessoa.codigoPostal,
-    pessoa.telefone,
-    pessoa.peso,
-    pessoa.altura,
-    pessoa.pressaoArterial,
-    pessoa.indiceColesterol.total,
-    pessoa.indiceColesterol.hdl,
-    pessoa.indiceColesterol.ldl
-  );
+  fprintf(f, "\n%s;%d;%d;%d;%d;%s;%s;%u;%u;%u;%u;%u;%u;%d;%d;%d", pessoa.nome, pessoa.cc, pessoa.dataNascimento.dia,
+          pessoa.dataNascimento.mes, pessoa.dataNascimento.ano, pessoa.morada, pessoa.localidade, pessoa.codigoPostal,
+          pessoa.telefone, pessoa.peso, pessoa.altura, pessoa.pressaoArterial.min, pessoa.pressaoArterial.max,
+          pessoa.indiceColesterol.total, pessoa.indiceColesterol.hdl, pessoa.indiceColesterol.ldl);
 
-  printf("Utente guardado com sucesso.\n");
+  clearTerminal();
+
+  printf("Utente '%s' guardado com sucesso.\n", pessoa.nome);
 
   fclose(f);
 }
@@ -819,18 +904,18 @@ void alterarUtente() {
         " 3 - data de nascimento\n"
         " 4 - morada\n"
         " 5 - localidade\n"
-        " 6 - codigoPostal\n"
+        " 6 - código postal\n"
         " 7 - telefone\n"
         " 8 - peso\n"
         " 9 - altura\n"
-        "10 - pressaoArterial\n"
+        "10 - pressão arterial\n"
         "11 - indice de colesterol\n"
-        "0 - voltar\n");
+        " 0 - voltar\n");
 
     scanf("%hd", &option);
   } while (option < 0 || option > 11);
 
-  // NOME;CC;DIA;MES;ANO;MORADA;LOCALIDADE;CODIGO_POSTAL;TELEFONE;PESO;ALTURA;PRESAO_ARTERIAL;COLESTEROL_TOTAL;COLESTEROL_HDL;COLESTEROL_LDL
+  // NOME;CC;DIA;MES;ANO;MORADA;LOCALIDADE;CODIGO_POSTAL;TELEFONE;PESO;ALTURA;PRESAO_ARTERIAL_MIN;PRESAO_ARTERIAL_MAX;COLESTEROL_TOTAL;COLESTEROL_HDL;COLESTEROL_LDL
 
   char newItem[STRING_LENGTH];
   bool shouldUpdateStr = true;
@@ -850,81 +935,95 @@ void alterarUtente() {
      8 TELEFONE
      9 PESO
     10 ALTURA
-    11 PRESAO_ARTERIAL
-    12 COLESTEROL_TOTAL
-    13 COLESTEROL_HDL
-    14 COLESTEROL
+    11 PRESSAO_ARTERIAL_MIN
+    12 PRESSAO_ARTERIAL_MAX
+    13 COLESTEROL_TOTAL
+    14 COLESTEROL_HDL
+    15 COLESTEROL
   */
 
   switch (option) {
-    case 1: // Nome
+    case 1:  // Nome
       printf("Qual é o novo nome do utente?\n");
       scanf("%s", newItem);
       break;
-    case 2: // CC
+    case 2:  // CC
       printf("Qual é o novo nº do cartão de cidadão do utente?\n");
       scanf("%s", newItem);
       break;
-    case 3: { // Data de Nascimento
+    case 3: {  // Data de Nascimento
       char dia[3], mes[3], ano[5];
-      printf("Qual é a nova data de nascimento do utente (dd/mm/yyyy; e.g. 17/10/2000)?\n");
+      printf(
+          "Qual é a nova data de nascimento do utente (dd/mm/yyyy; e.g. "
+          "17/10/2000)?\n");
       scanf("%s/%s/%s", dia, mes, ano);
 
-      // Como a data está a ser guardada separadamente, vamos ter que atualizar todos os items manualmente
+      // Como a data está a ser guardada separadamente, vamos ter que atualizar
+      // todos os items manualmente
       shouldUpdateStr = false;
       strcpy(info[2], dia);
       strcpy(info[3], mes);
       strcpy(info[4], ano);
       break;
     }
-    case 4: // Morada
+    case 4:  // Morada
       printf("Qual é a nova morada do utente?\n");
       scanf("%s", newItem);
       pos = option + 1;
       break;
-    case 5: // Localidade
+    case 5:  // Localidade
       printf("Qual é a nova localidade do utente?\n");
       scanf("%s", newItem);
       pos = option + 1;
       break;
-    case 6: // Código Postal
+    case 6:  // Código Postal
       printf("Qual é o novo código postal do utente?\n");
       scanf("%s", newItem);
       pos = option + 1;
       break;
-    case 7: // Telefone
+    case 7:  // Telefone
       printf("Qual é o novo nº de telefone do utente?\n");
       scanf("%s", newItem);
       pos = option + 1;
       break;
-    case 8: // Peso
+    case 8:  // Peso
       printf("Qual é o novo peso do utente?\n");
       scanf("%s", newItem);
       pos = option + 1;
       break;
-    case 9: // Altura
+    case 9:  // Altura
       printf("Qual é a nova altura do utente?\n");
       scanf("%s", newItem);
       pos = option + 1;
       break;
-    case 10: // Pressão Arterial
-      printf("Qual é a nova pressão arterial do utente?\n");
-      scanf("%s", newItem);
-      pos = option + 1;
-      break;
-    case 11: { // Índice de Colesterol
-      char total[5], hdl[5], ldl[5];
-      printf("Quais são os novos níveis de colesterol do utente (Total/HDL/LDL)?\n");
-      scanf("%s/%s/%s", total, hdl, ldl);
+    case 10: {  // Pressão Arterial
+      char min[5], max[5];
+      printf("Qual é a nova pressão arterial do utente (min/max)?\n");
+      scanf("%s/%s", min, max);
 
-      // Como a data está a ser guardada separadamente, vamos ter que atualizar todos os items manualmente
+      // Como a data está a ser guardada separadamente, vamos ter que atualizar
+      // todos os items manualmente
       shouldUpdateStr = false;
-      strcpy(info[12], total);
-      strcpy(info[13], hdl);
-      strcpy(info[14], ldl);
+      strcpy(info[11], min);
+      strcpy(info[12], max);
       break;
     }
-    case 0: // Voltar
+    case 11: {  // Índice de Colesterol
+      char total[5], hdl[5], ldl[5];
+      printf(
+          "Quais são os novos níveis de colesterol do utente "
+          "(Total/HDL/LDL)?\n");
+      scanf("%s/%s/%s", total, hdl, ldl);
+
+      // Como a data está a ser guardada separadamente, vamos ter que atualizar
+      // todos os items manualmente
+      shouldUpdateStr = false;
+      strcpy(info[13], total);
+      strcpy(info[14], hdl);
+      strcpy(info[15], ldl);
+      break;
+    }
+    case 0:  // Voltar
       freeArrayOfStrings(info, camposLidos);
       fclose(f);
       return;
@@ -947,7 +1046,8 @@ void alterarUtente() {
   f = openUtentesFile("a+", "ab+");
 
   // Adicionar o utente atualizado
-  fprintf(f, "\n%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s", info[0], info[1], info[2], info[3], info[4], info[5], info[6], info[7], info[8], info[9], info[10], info[11], info[12], info[13], info[14]);
+  fprintf(f, "\n%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s", info[0], info[1], info[2], info[3], info[4], info[5],
+          info[6], info[7], info[8], info[9], info[10], info[11], info[12], info[13], info[14], info[15]);
 
   freeArrayOfStrings(info, camposLidos);
   fclose(f);
@@ -976,7 +1076,8 @@ void eliminarUtente() {
 
 #pragma region InteractiveMenu
 
-// Isto é necessário porque as duas funções se chamam uma à outra em certas condições
+// Isto é necessário porque as duas funções se chamam uma à outra em certas
+// condições
 void startInteractiveMenu();
 
 void startAlimentosInteractiveMenu() {
@@ -1014,6 +1115,7 @@ void startAlimentosInteractiveMenu() {
       listarAlimentos();
       break;
     case 0:  // voltar
+      startInteractiveMenu();
       return;
   }
 }
@@ -1049,6 +1151,7 @@ void startUtentesInteractiveMenu() {
       eliminarUtente();
       break;
     case 0:  // voltar
+      startInteractiveMenu();
       return;
   }
 }
@@ -1074,7 +1177,7 @@ void startInteractiveMenu() {
       startAlimentosInteractiveMenu();
       break;
 
-    case 2: { // utentes
+    case 2: {  // utentes
       char tipoFicheiro[4];
       do {
         printf("Qual é o tipo de ficheiro que deseja usar? (txt ou dat) ");
@@ -1097,9 +1200,6 @@ void startInteractiveMenu() {
       exit(0);
       return;
   }
-
-  // Caso chegue a este ponto, o utilizador deve ter usado a opção para 'voltar'
-  startInteractiveMenu();
 }
 
 #pragma endregion
