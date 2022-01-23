@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define STRING_LENGTH 150
 #define TAMANHO_NOME 50
@@ -15,7 +16,6 @@
 #define FICHEIRO_ALIMENTOS "Alimentos.txt"
 #define FICHEIRO_UTENTES_TXT "Pessoas.txt"
 #define FICHEIRO_UTENTES_DAT "Pessoas.dat"
-#define FICHEIRO_MENUS_TXT "Menus.txt"
 #define FICHEIRO_MENUS_DAT "Menus.dat"
 #define FICHEIRO_TMP_TXT "tmp.txt"
 #define FICHEIRO_TMP_DAT "tmp.dat"
@@ -28,7 +28,7 @@ bool useTextFileForUtentes = false;
 
 // Função de utilidade para limpar o terminal
 void clearTerminal() {
-#ifdef _WIN32  // Se for um sistema Windows
+#ifdef _WIN32  // Windows
   system("cls");
 #else  // Se não
   system("clear");
@@ -504,145 +504,6 @@ void listarAlimentos() {
 
 #pragma endregion
 
-#pragma region Menus
-
-/*
- * 1. Pequeno Almoço; (1, 3, 6)
- * 2. Almoco; (1, 2, 4, 5, 6, 7, 8)
- * 3. Lanche; (1, 3, 6)
- * 4. Jantar; (1, 2, 4, 5, 6, 7, 8)
- * 5. Ceia; (1, 3, 6)
- * 6. Outra. (1, 2, 3, 4, 5, 6, 7, 8)
- */
-bool alimentoIncluidoNoTipoDeRefeicao(int grupoAlimento, int tipoDeRefeicao) {
-  switch (tipoDeRefeicao) {
-    case 1:
-    case 3:
-    case 5:
-      return grupoAlimento == 1 || grupoAlimento == 3 || grupoAlimento == 6;
-    case 2:
-    case 4:
-      return grupoAlimento == 1 || grupoAlimento == 2 || (grupoAlimento >= 4 && grupoAlimento <= 8);
-    case 6:
-      return grupoAlimento >= 1 && grupoAlimento <= 8;
-    default:
-      return false;
-  }
-}
-
-void gerarRefeicoes() {
-  MENU menu;
-
-  printf("Qual é o número de cartão de cidadão da pessoa?\n");
-  scanf("%u", &menu.cc);
-
-  do {
-    printf("Qual é a data da refeição (dd/mm/yyyy; e.g. 3/4/2022)?\n");
-    scanf("%d/%d/%d", &menu.dataRefeicao.dia, &menu.dataRefeicao.mes, &menu.dataRefeicao.ano);
-  } while (!validarData(menu.dataRefeicao));
-
-  clearTerminal();
-
-  do {
-    printf(
-        "Qual é o tipo de refeição que quer?\n"
-        " 1 - Pequeno Almoço\n"
-        " 2 - Almoço\n"
-        " 3 - Lanche\n"
-        " 4 - Jantar\n"
-        " 5 - Ceia\n"
-        " 6 - Outra\n");
-
-    scanf("%hd", &menu.refeicaoDoDia);
-  } while (menu.refeicaoDoDia < 1 || menu.refeicaoDoDia > 6);
-
-  clearTerminal();
-
-  printf("Qual é a quantidade de calorias que pretende ingerir (KCal)?\n");
-  scanf("%f", &menu.kCalorias);
-
-  printf("Qual é o mínimo e máximo de calorias que pretende ingerir (min/max)?\n");
-  scanf("%f/%f", &menu.minProteinas, &menu.maxProteinas);
-
-  clearTerminal();
-
-  printf("Qual é a quantidade de gorduras?\n");
-  scanf("%f", &menu.gorduras);
-
-  printf("Qual é a quantidade de hidratos de carbono?\n");
-  scanf("%f", &menu.hidratosCarbono);
-
-  clearTerminal();
-
-  short minimoCategorias;
-  do {
-    printf("Qual é o minimo de categorias de alimentos a incluir na refeição?\n");
-    scanf("%hd", &minimoCategorias);
-  } while (minimoCategorias < 1 || minimoCategorias > 10);
-
-  clearTerminal();
-
-  FILE *f = openFile(FICHEIRO_ALIMENTOS, "r");
-
-  int camposLidos, totalCalorias = 0, totalProteinas = 0, totalGorduras = 0, totalHidratosCarbono = 0, categorias = 0;
-  char **line;
-
-  /*
-    Gerar um conjunto de 10 refeições do tipo indicado pelo utilizador e com as
-    calorias que pretende ingerir, atendendo igualmente ao mínimo e máximo de
-    Proteínas, Gorduras e H. Carbono especificados e ao mínimo de categorias de
-    alimentos a incluir, devendo, cada proposta, aproximarse ao máximo das
-    especificações indicadas pela pessoa;
-  */
-
-  for (int i = 0; i < N_REFEICOES; i++) {
-    // Mover o ponteiro para o inicio do ficheiro em cada iteração
-    fseek(f, 0, SEEK_SET);
-
-    while (!feof(f)) {
-      line = splitLine(f, N_CAMPOS_ALIMENTOS, &camposLidos, ";");
-      if (camposLidos < N_CAMPOS_ALIMENTOS) {
-        freeArrayOfStrings(line, camposLidos);
-        continue;
-      }
-
-      // atoi(): Função para converter string para int
-      // https://www.educative.io/edpresso/how-to-convert-a-string-to-an-integer-in-c
-      int grupo = atoi(line[5]);
-
-      if (alimentoIncluidoNoTipoDeRefeicao(grupo, menu.refeicaoDoDia)) {
-        int calorias = atoi(line[2]);
-
-        // atof(): Função para converter string para float (basicamente o mesmo que o atoi())
-        // https://stackoverflow.com/a/7951034/11252146
-        float proteina = atof(line[3]), gordura = atof(line[4]), hidratosCarbono = atof(line[6]);
-
-        // Caso ultrapasse um dos limites, passar ao próximo alimento
-        if ((totalCalorias + calorias > menu.kCalorias) || (totalProteinas + proteina > menu.maxProteinas) ||
-            (totalGorduras + gordura > menu.gorduras) ||
-            (totalHidratosCarbono + hidratosCarbono > menu.hidratosCarbono)) {
-          freeArrayOfStrings(line, camposLidos);
-          continue;
-        }
-
-        strcpy(menu.refeicoes[i].alimentos[categorias].nome, line[0]);
-        menu.refeicoes[i].alimentos[categorias].quantidade = 1;
-
-        totalCalorias += calorias;
-        totalProteinas += proteina;
-        totalGorduras += gordura;
-        totalHidratosCarbono += hidratosCarbono;
-      }
-
-      freeArrayOfStrings(line, camposLidos);
-    }
-  }
-
-  fclose(f);
-}
-
-#pragma endregion
-
 #pragma region Utentes
 
 // NOME;CC;DIA;MES;ANO;MORADA;LOCALIDADE;CODIGO_POSTAL;TELEFONE;PESO;ALTURA;PRESAO_ARTERIAL_MIN;PRESAO_ARTERIAL_MAX;COLESTEROL_TOTAL;COLESTEROL_HDL;COLESTEROL_LDL
@@ -1074,6 +935,179 @@ void eliminarUtente() {
 
 #pragma endregion
 
+#pragma region Menus
+
+/*
+ * 1. Pequeno Almoço; (1, 3, 6)
+ * 2. Almoco; (1, 2, 4, 5, 6, 7, 8)
+ * 3. Lanche; (1, 3, 6)
+ * 4. Jantar; (1, 2, 4, 5, 6, 7, 8)
+ * 5. Ceia; (1, 3, 6)
+ * 6. Outra. (1, 2, 3, 4, 5, 6, 7, 8)
+ */
+bool alimentoIncluidoNoTipoDeRefeicao(int grupoAlimento, int tipoDeRefeicao) {
+  switch (tipoDeRefeicao) {
+    case 1:
+    case 3:
+    case 5:
+      return grupoAlimento == 1 || grupoAlimento == 3 || grupoAlimento == 6;
+    case 2:
+    case 4:
+      return grupoAlimento == 1 || grupoAlimento == 2 || (grupoAlimento >= 4 && grupoAlimento <= 8);
+    case 6:
+      return grupoAlimento >= 1 && grupoAlimento <= 8;
+    default:
+      return false;
+  }
+}
+
+// TODO
+// void guardarMenu(MENU menu) {
+//   FILE *f = openFile(FICHEIRO_MENUS_DAT, "a+");
+
+//   menu.refeicoes
+
+//   // cc;refeicao_do_dia;data_dia;data_mes;data_ano;gorduras;hidratos_carbono;calorias;min_protainas;max_protainas
+
+//   fprintf(
+//     f,
+//     "\n%u;",
+//     menu.cc
+//   );
+// }
+
+void gerarMenu() {
+  MENU menu;
+
+  printf("Qual é o número de cartão de cidadão da pessoa?\n");
+  scanf("%u", &menu.cc);
+
+  do {
+    printf("Qual é a data da refeição (dd/mm/yyyy; e.g. 3/4/2022)?\n");
+    scanf("%d/%d/%d", &menu.dataRefeicao.dia, &menu.dataRefeicao.mes, &menu.dataRefeicao.ano);
+  } while (!validarData(menu.dataRefeicao));
+
+  clearTerminal();
+
+  do {
+    printf(
+        "Qual é o tipo de refeição que quer?\n"
+        " 1 - Pequeno Almoço\n"
+        " 2 - Almoço\n"
+        " 3 - Lanche\n"
+        " 4 - Jantar\n"
+        " 5 - Ceia\n"
+        " 6 - Outra\n");
+
+    scanf("%hd", &menu.refeicaoDoDia);
+  } while (menu.refeicaoDoDia < 1 || menu.refeicaoDoDia > 6);
+
+  clearTerminal();
+
+  printf("Qual é a quantidade de calorias que pretende ingerir (KCal)?\n");
+  scanf("%f", &menu.kCalorias);
+
+  printf("Qual é o mínimo e máximo de calorias que pretende ingerir (min/max)?\n");
+  scanf("%f/%f", &menu.minProteinas, &menu.maxProteinas);
+
+  clearTerminal();
+
+  printf("Qual é a quantidade de gorduras?\n");
+  scanf("%f", &menu.gorduras);
+
+  printf("Qual é a quantidade de hidratos de carbono?\n");
+  scanf("%f", &menu.hidratosCarbono);
+
+  clearTerminal();
+
+  short minimoCategorias;
+  do {
+    printf("Qual é o minimo de categorias de alimentos a incluir na refeição?\n");
+    scanf("%hd", &minimoCategorias);
+  } while (minimoCategorias < 1 || minimoCategorias > 10);
+
+  clearTerminal();
+
+  FILE *f = openFile(FICHEIRO_ALIMENTOS, "r");
+
+  int camposLidos, totalCalorias = 0, totalProteinas = 0, totalGorduras = 0, totalHidratosCarbono = 0, categorias = 0;
+  char **line;
+
+  /*
+    Gerar um conjunto de 10 refeições do tipo indicado pelo utilizador e com as
+    calorias que pretende ingerir, atendendo igualmente ao mínimo e máximo de
+    Proteínas, Gorduras e H. Carbono especificados e ao mínimo de categorias de
+    alimentos a incluir, devendo, cada proposta, aproximarse ao máximo das
+    especificações indicadas pela pessoa;
+  */
+
+  for (int i = 0; i < N_REFEICOES; i++) {
+    // Mover o ponteiro para o inicio do ficheiro em cada iteração
+    fseek(f, 0, SEEK_SET);
+
+    int qntAlimentos = 0;
+
+    printf("--- %dª Refeição ---\n", i + 1);
+
+    while (!feof(f)) {
+      if (qntAlimentos >= MAX_ALIMENTOS) {
+        break;
+      }
+
+      line = splitLine(f, N_CAMPOS_ALIMENTOS, &camposLidos, ";");
+      if (camposLidos < N_CAMPOS_ALIMENTOS) {
+        freeArrayOfStrings(line, camposLidos);
+        continue;
+      }
+
+      // rand() genera um número aleatorio entre 0 e RAND_MAX (+32k)
+      // https://stackoverflow.com/a/822368/11252146
+      if (rand() % 100 > 50) {
+        continue;
+      }
+
+      // atoi(): Função para converter string para int
+      // https://www.educative.io/edpresso/how-to-convert-a-string-to-an-integer-in-c
+      int grupo = atoi(line[5]);
+
+      if (alimentoIncluidoNoTipoDeRefeicao(grupo, menu.refeicaoDoDia)) {
+        int calorias = atoi(line[2]);
+
+        // atof(): Função para converter string para float (basicamente o mesmo que o atoi())
+        // https://stackoverflow.com/a/7951034/11252146
+        float proteina = atof(line[3]), gordura = atof(line[4]), hidratosCarbono = atof(line[6]);
+
+        // Caso ultrapasse um dos limites, passar ao próximo alimento
+        if ((totalCalorias + calorias > menu.kCalorias) || (totalProteinas + proteina > menu.maxProteinas) ||
+            (totalGorduras + gordura > menu.gorduras) ||
+            (totalHidratosCarbono + hidratosCarbono > menu.hidratosCarbono)) {
+          freeArrayOfStrings(line, camposLidos);
+          continue;
+        }
+
+        strcpy(menu.refeicoes[i].alimentos[qntAlimentos].nome, line[0]);
+        menu.refeicoes[i].alimentos[qntAlimentos].quantidade = 1;
+
+        printf(" - %d | %s\n", qntAlimentos + 1, line[0]);
+
+        qntAlimentos++;
+        totalCalorias += calorias;
+        totalProteinas += proteina;
+        totalGorduras += gordura;
+        totalHidratosCarbono += hidratosCarbono;
+      }
+
+      freeArrayOfStrings(line, camposLidos);
+    }
+
+    printf("--------------------------\n");
+  }
+
+  fclose(f);
+}
+
+#pragma endregion
+
 #pragma region InteractiveMenu
 
 // Isto é necessário porque as duas funções se chamam uma à outra em certas
@@ -1193,7 +1227,7 @@ void startInteractiveMenu() {
     }
 
     case 3:  // gerar refeições
-      gerarRefeicoes();
+      gerarMenu();
       break;
 
     case 0:
@@ -1206,6 +1240,10 @@ void startInteractiveMenu() {
 
 void main() {
   setlocale(LC_ALL, "Portuguese");
+
+  // Inicializa o generador de números aleatórios que está a ser usado na geração de menus, na função gerarMenu()
+  // https://stackoverflow.com/a/822368/11252146
+  srand(time(NULL));
 
   startInteractiveMenu();
 }
